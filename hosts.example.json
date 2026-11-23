@@ -1,0 +1,4 @@
+[
+  { "name": "local" },
+  { "name": "other-mac", "ssh": "user@other-mac.local" }
+]
