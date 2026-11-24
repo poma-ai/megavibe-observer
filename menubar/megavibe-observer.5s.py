@@ -4,12 +4,14 @@
 # <xbar.var>string(OBSERVER_URL="http://127.0.0.1:4747"): Where observer.py listens.</xbar.var>
 # <swiftbar.hideAbout>true</swiftbar.hideAbout>
 # <swiftbar.hideRunInTerminal>true</swiftbar.hideRunInTerminal>
-"""SwiftBar plugin for Megavibe Observer. Stdlib only, read-only: it GETs /api/snapshot and prints a menu.
+"""SwiftBar (macOS) / Argos (GNOME) plugin for Megavibe Observer. Stdlib only, read-only: it GETs /api/snapshot and prints a menu.
+`--waybar` prints one JSON object instead (Waybar custom module, `return-type: json`); same logic, different output.
 
 The refresh interval is the "5s" in the file name. A session counts as needing attention when the snapshot reports
 `attention` (waiting for input or a permission prompt) or its host's disk level is critical, the same rule the web UI
 uses. A notification fires once when a session enters that state and again only after it left it.
 """
+import html
 import json
 import os
 import shutil
@@ -107,9 +109,20 @@ def control(running):
 
 
 def notify(title, text):
-    # Values go through argv, never into the AppleScript source, so a session name cannot inject script.
-    subprocess.run(["osascript", "-e", "on run argv", "-e", "display notification (item 1 of argv) with title (item 2 of argv)",
-                    "-e", "end run", text, title], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5)
+    if sys.platform == "darwin":
+        # Values go through argv, never into the AppleScript source, so a session name cannot inject script.
+        subprocess.run(["osascript", "-e", "on run argv", "-e", "display notification (item 1 of argv) with title (item 2 of argv)",
+                        "-e", "end run", text, title], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5)
+    elif shutil.which("notify-send"):
+        subprocess.run(["notify-send", "-a", "Megavibe Observer", "--", title, text], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5)
+
+
+def waybar(lines):
+    """Waybar JSON for the menu `plan` built: title -> text, the session and host rows -> tooltip, state -> css class."""
+    bare = lambda l: l.split(" | ")[0]
+    tip = [bare(l) for l in lines[2:] if l != "---" and not l.startswith(("Open Observer", "Refresh"))]
+    cls = "attention" if lines[0].startswith("⚠") else "busy" if "#60a5fa" in lines[0] else "idle"
+    return json.dumps({"text": bare(lines[0]), "tooltip": html.escape("\n".join(tip)), "class": cls})
 
 
 def load_state():
@@ -131,12 +144,15 @@ def save_state(keys):
         pass
 
 
-def main():
+def main(as_waybar=False):
     try:
         with urllib.request.urlopen(URL + "/api/snapshot", timeout=3) as r:
             snapshot = json.load(r)
     except Exception:  # offline is a state to show, not a crash; the saved state is kept so a blip does not re-notify
-        print("\n".join(["◌ | color=gray", "---", "Observer offline | color=gray"] + control(False)))
+        if as_waybar:
+            print(json.dumps({"text": "◌", "tooltip": "Observer offline", "class": "offline"}))
+        else:
+            print("\n".join(["◌ | color=gray", "---", "Observer offline | color=gray"] + control(False)))
         return
     lines, notes, keys = plan(snapshot, load_state())
     for title, text in notes:
@@ -145,11 +161,13 @@ def main():
         except (OSError, subprocess.SubprocessError):
             pass
     save_state(keys)
-    print("\n".join(lines + control(True)))
+    print(waybar(lines) if as_waybar else "\n".join(lines + control(True)))
 
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1:
+    if sys.argv[1:] == ["--waybar"]:
+        main(True)
+    elif len(sys.argv) > 1:
         action(sys.argv[1])
     else:
         main()

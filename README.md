@@ -9,6 +9,7 @@ It only reads local files (`~/.claude/sessions`, `~/.claude/projects`, and megav
 - `python3` 3.7 or newer runs the whole thing: `observer.py` is the server and `collector/snapshot.py` the collector. Standard library only.
 - Node 18+ with `npm`, only to build the UI once.
 - Other machines (optional): `python3` 3.6+ and passwordless `ssh`. Nothing is installed there.
+- Menu bar plugin (optional): SwiftBar, Argos or Waybar, plus `notify-send` on Linux and `tmux` for Start/Stop. See [Menu bar](#menu-bar-optional).
 
 ## Start
 
@@ -34,24 +35,34 @@ Copy `hosts.example.json` to `hosts.json` and list them:
 
 The local host is read in-process. For a host with `ssh`, the server pipes `collector/snapshot.py` to `python3` there over `ssh -o BatchMode=yes`. Without a `hosts.json` it watches the local machine only.
 
-## Menu bar (macOS, optional)
+## Menu bar (optional)
 
-A [SwiftBar](https://github.com/swiftbar/SwiftBar) plugin shows the live sessions in the menu bar. Each line opens the web UI. A notification fires when a session waits for input, hits a permission prompt or sits on a host with critically low disk, and fires again only after that session recovered.
+One plugin file, `menubar/megavibe-observer.5s.py`, shows the live sessions in the menu or status bar on macOS and Linux. Each line opens the web UI. A notification fires when a session waits for input, hits a permission prompt or sits on a host with critically low disk, and fires again only after that session recovered. Set `OBSERVER_URL` in the plugin's settings if the observer uses another port.
+
+### macOS (SwiftBar)
 
 ```
 brew install swiftbar
 ln -s "$PWD/menubar/megavibe-observer.5s.py" "<your SwiftBar plugin folder>/"
 ```
 
-When the observer is down the menu shows "Start observer", which runs it in a tmux session named `megavibe-observer` (needs `tmux`; local `OBSERVER_URL` only). While that session exists the menu shows "Stop observer". Watch it with `tmux attach -t megavibe-observer`. Set `OBSERVER_URL` in the plugin's settings if you use another port. Notifications are sent by `osascript`, so macOS attributes them to Script Editor: allow that app in System Settings, Notifications. Clicking a notification does not open the UI.
+Notifications are sent by `osascript`, so macOS attributes them to Script Editor: allow that app in System Settings, Notifications. Clicking a notification does not open the UI.
 
-## How it works
+### Linux, GNOME (Argos)
 
-- `observer.py` serves `ui/dist`, `/api/snapshot` (all hosts) and `/api/detail?host=…&id=…` (one session, parsed on demand and cached 30 s), and `/api/history[?tmp=1]` (past sessions per host, cached 30 s).
-- `collector/snapshot.py` builds one host's snapshot. `--detail <session id>` parses one session's transcript and subagent logs for the click-through panel. `--history [tmp]` lists past sessions from transcript stat plus the first 64 KB of each; sessions whose cwd is a temp directory are hidden unless `tmp` is given.
-- `ui/` is Svelte 5 + Vite.
+The [Argos](https://github.com/p-e-w/argos) extension reads the same line format as SwiftBar. Link the same file into `~/.config/argos/`. Notifications use `notify-send` (libnotify).
 
-Tests: `python3 -m unittest discover -s tests`.
+### Linux, Waybar
+
+Add a custom module. Notifications use `notify-send`. The tooltip lists the sessions and hosts, and the class is `attention`, `busy`, `idle` or `offline` for styling. There is no Start/Stop item here, start the observer yourself.
+
+```
+"custom/observer": {"exec": "/path/to/megavibe-observer/menubar/megavibe-observer.5s.py --waybar", "return-type": "json", "interval": 5, "on-click": "xdg-open http://127.0.0.1:4747"}
+```
+
+### Start and stop from the menu
+
+When the observer is down, the SwiftBar and Argos menus show "Start observer", which runs it in a tmux session named `megavibe-observer` (needs `tmux`; local `OBSERVER_URL` only). While that session exists they show "Stop observer". Watch it with `tmux attach -t megavibe-observer`.
 
 ## Good to know
 

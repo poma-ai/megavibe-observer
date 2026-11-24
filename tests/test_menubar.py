@@ -47,6 +47,16 @@ class Menubar(unittest.TestCase):
         self.assertIsNone(mb.start_args("http://example.com:4747"))   # never launch for a remote address
         self.assertIsNone(mb.start_args("http://127.0.0.1"))
 
+    def test_waybar_json(self):
+        import json
+        s = snap([{"sessionId": "a", "name": "a<b>", "status": "waiting", "attention": {"why": "permission prompt"}}])
+        out = json.loads(mb.waybar(mb.plan(s, set())[0]))
+        self.assertEqual((out["text"], out["class"]), ("⚠ 1", "attention"))
+        self.assertIn("a&lt;b&gt;", out["tooltip"])                   # tooltip is Pango markup
+        self.assertNotIn("href=", out["tooltip"])
+        idle = json.loads(mb.waybar(mb.plan(snap([]), set())[0]))
+        self.assertEqual(idle["class"], "idle")
+
     def test_quiet_state(self):
         lines, notes, _ = mb.plan(snap([]), set())
         self.assertEqual(notes, [])
