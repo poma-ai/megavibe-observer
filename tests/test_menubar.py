@@ -40,6 +40,13 @@ class Menubar(unittest.TestCase):
         self.assertEqual(row.count("href="), 2)                      # the name's pipe was neutralised; only the real href and "evil" text remain
         self.assertNotIn("| href=http://evil", row)
 
+    def test_start_only_for_local_urls_and_uses_the_url_port(self):
+        a = mb.start_args("http://127.0.0.1:4747")
+        self.assertEqual(a[:4], ["new-session", "-d", "-s", "megavibe-observer"])
+        self.assertIn("PORT=4747", a[-1])
+        self.assertIsNone(mb.start_args("http://example.com:4747"))   # never launch for a remote address
+        self.assertIsNone(mb.start_args("http://127.0.0.1"))
+
     def test_quiet_state(self):
         lines, notes, _ = mb.plan(snap([]), set())
         self.assertEqual(notes, [])

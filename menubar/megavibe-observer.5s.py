@@ -12,13 +12,18 @@ uses. A notification fires once when a session enters that state and again only 
 """
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
 import urllib.request
+from urllib.parse import urlparse
 
 URL = os.environ.get("OBSERVER_URL", "http://127.0.0.1:4747").rstrip("/")
 STATE_DIR = os.environ.get("SWIFTBAR_PLUGIN_DATA_PATH") or tempfile.gettempdir()
+SESSION = "megavibe-observer"   # tmux session the Start item creates: `tmux attach -t megavibe-observer` to watch it
+SELF = os.path.realpath(__file__)
+ROOT = os.path.dirname(os.path.dirname(SELF))
 STATE = os.path.join(STATE_DIR, "megavibe-observer-notified.json")
 
 
@@ -68,6 +73,39 @@ def plan(snapshot, notified):
     return lines, notes, keys
 
 
+def tmux(*args):
+    exe = shutil.which("tmux", path=os.pathsep.join([os.environ.get("PATH", ""), "/opt/homebrew/bin", "/usr/local/bin", "/usr/bin"]))
+    if not exe:
+        return None
+    return subprocess.run([exe] + list(args), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5).returncode
+
+
+def start_args(url=URL):
+    """tmux arguments that start observer.py on the port of `url`; None unless it is a local address."""
+    u = urlparse(url)
+    if u.hostname not in ("127.0.0.1", "localhost") or not u.port:
+        return None
+    return ["new-session", "-d", "-s", SESSION, "-c", ROOT, "env PORT=%d %s observer.py" % (u.port, shutil.which("python3") or "python3")]
+
+
+def action(name):
+    """Run by SwiftBar when a menu item is clicked (`--start` / `--stop`)."""
+    if name == "--start" and tmux("has-session", "-t", SESSION) != 0:
+        a = start_args()
+        if a:
+            tmux(*a)
+    elif name == "--stop" and tmux("has-session", "-t", SESSION) == 0:
+        tmux("kill-session", "-t", SESSION)   # by exact session name, never by pattern
+
+
+def control(running):
+    """Menu items for starting or stopping the observer this plugin started."""
+    cmd = "bash=%s terminal=false refresh=true" % SELF
+    if not running:
+        return ["Start observer | %s param1=--start" % cmd] if start_args() else []
+    return ["Stop observer | %s param1=--stop" % cmd] if tmux("has-session", "-t", SESSION) == 0 else []
+
+
 def notify(title, text):
     # Values go through argv, never into the AppleScript source, so a session name cannot inject script.
     subprocess.run(["osascript", "-e", "on run argv", "-e", "display notification (item 1 of argv) with title (item 2 of argv)",
@@ -98,7 +136,7 @@ def main():
         with urllib.request.urlopen(URL + "/api/snapshot", timeout=3) as r:
             snapshot = json.load(r)
     except Exception:  # offline is a state to show, not a crash; the saved state is kept so a blip does not re-notify
-        print("◌ | color=gray\n---\nObserver offline | color=gray\nStart it: python3 observer.py\nOpen Observer | href=" + URL)
+        print("\n".join(["◌ | color=gray", "---", "Observer offline | color=gray"] + control(False)))
         return
     lines, notes, keys = plan(snapshot, load_state())
     for title, text in notes:
@@ -107,9 +145,12 @@ def main():
         except (OSError, subprocess.SubprocessError):
             pass
     save_state(keys)
-    print("\n".join(lines))
+    print("\n".join(lines + control(True)))
 
 
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) > 1:
+        action(sys.argv[1])
+    else:
+        main()
     sys.exit(0)

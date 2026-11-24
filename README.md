@@ -43,7 +43,7 @@ brew install swiftbar
 ln -s "$PWD/menubar/megavibe-observer.5s.py" "<your SwiftBar plugin folder>/"
 ```
 
-`observer.py` must be running (the plugin shows "Observer offline" otherwise). Set `OBSERVER_URL` in the plugin's settings if you use another port. Notifications are sent by `osascript`, so macOS attributes them to Script Editor: allow that app in System Settings, Notifications. Clicking a notification does not open the UI.
+When the observer is down the menu shows "Start observer", which runs it in a tmux session named `megavibe-observer` (needs `tmux`; local `OBSERVER_URL` only). While that session exists the menu shows "Stop observer". Watch it with `tmux attach -t megavibe-observer`. Set `OBSERVER_URL` in the plugin's settings if you use another port. Notifications are sent by `osascript`, so macOS attributes them to Script Editor: allow that app in System Settings, Notifications. Clicking a notification does not open the UI.
 
 ## How it works
 
