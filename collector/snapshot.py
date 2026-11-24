@@ -18,6 +18,10 @@ TOKEN_KEYS = (("input", "input_tokens"), ("output", "output_tokens"),
               ("cacheWrite", "cache_creation_input_tokens"), ("cacheRead", "cache_read_input_tokens"))
 DETAIL_MAX_BYTES = 200_000_000   # a transcript or subagent log bigger than this is skipped in the detail view
 SESSION_ID = re.compile(r"^[0-9A-Za-z-]{1,64}$")
+HISTORY_HEAD = 65_536     # bytes of a transcript's start read for its first cwd/timestamp/branch
+HISTORY_LIMIT = 200
+TMP_DIRS = ("/tmp/", "/private/tmp/", "/var/folders/", "/private/var/folders/")
+TMP_PROJECT = ("-tmp-", "-private-tmp-", "-var-folders-", "-private-var-folders-")
 WARNINGS = []
 
 # A non-interactive ssh shell often lacks the directories tmux and ps live in.
@@ -365,6 +369,59 @@ def detail(sid):
     return out
 
 
+def is_tmp(cwd):
+    return isinstance(cwd, str) and (cwd + "/").startswith(TMP_DIRS)
+
+
+def history(include_tmp=False, limit=HISTORY_LIMIT):
+    """Past and present sessions of this host, newest first, from the transcripts alone (stat plus the first 64 KB of
+    each file, never a full parse). Sessions whose cwd is a temp directory (headless workers, reviewer and
+    summary scratch runs) are left out unless include_tmp. Counts and names only, never text."""
+    files = []
+    for f in glob.glob(os.path.join(HOME, ".claude/projects/*/*.jsonl")):
+        try:
+            st = os.stat(f)
+        except OSError:
+            continue
+        files.append((st.st_mtime, st.st_size, f))
+    files.sort(reverse=True)
+    rows, hidden = [], 0
+    for mtime, size, f in files:
+        sid = os.path.basename(f)[:-len(".jsonl")]
+        if not SESSION_ID.match(sid):
+            continue
+        proj = os.path.basename(os.path.dirname(f))
+        if not include_tmp and proj.startswith(TMP_PROJECT):
+            hidden += 1
+            continue
+        cwd = branch = first = None
+        try:
+            with open(f, "rb") as fh:
+                head = fh.read(HISTORY_HEAD)
+        except OSError:
+            continue
+        for raw in head.split(b"\n")[:-1]:   # the last piece may be cut mid-line
+            try:
+                d = json.loads(raw)
+            except ValueError:
+                continue
+            if isinstance(d, dict) and isinstance(d.get("cwd"), str):
+                cwd = d["cwd"]
+                b, ts = d.get("gitBranch"), d.get("timestamp")
+                branch = re.sub(r"[^A-Za-z0-9_./:-]", "?", b)[:80] if isinstance(b, str) and b else None
+                first = ts if isinstance(ts, str) and ISO.match(ts) else None
+                break
+        if not include_tmp and is_tmp(cwd):
+            hidden += 1
+            continue
+        rows.append({"sessionId": sid, "cwd": cwd, "project": proj, "branch": branch, "first": first,
+                     "lastMs": int(mtime * 1000), "bytes": size})
+        if len(rows) >= limit:
+            break
+    return {"host": socket.gethostname().split(".")[0], "history": rows, "hiddenTmp": hidden,
+            "total": len(files), "capped": len(rows) >= limit}
+
+
 def session_row(s, parent, panes):
     pid, sid = s.get("pid"), s.get("sessionId")
     if type(pid) is not int or pid <= 1 or not alive(pid):
@@ -446,7 +503,10 @@ def main():
 
 
 if __name__ == "__main__":
-    if len(sys.argv) == 3 and sys.argv[1] == "--detail":
+    if len(sys.argv) >= 2 and sys.argv[1] == "--history":
+        json.dump(history(include_tmp=sys.argv[2:3] == ["tmp"]), sys.stdout)
+        sys.stdout.write("\n")
+    elif len(sys.argv) == 3 and sys.argv[1] == "--detail":
         json.dump(detail(sys.argv[2]), sys.stdout)
         sys.stdout.write("\n")
     else:

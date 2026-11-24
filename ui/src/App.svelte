@@ -59,6 +59,55 @@
     attention: sessions.filter(needsAttention).length,
   });
 
+  // History tab: past sessions from the transcripts, fetched when the tab opens (the live poll stays small).
+  let tab = $state('live');
+  let hist = $state([]);
+  let histErr = $state(null);
+  let histLoading = $state(false);
+  let showTmp = $state(false);
+  let histFilter = $state('');
+  async function loadHistory() {
+    histLoading = true;
+    try {
+      const r = await fetch('/api/history' + (showTmp ? '?tmp=1' : ''));
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      hist = (await r.json()).hosts;
+      histErr = null;
+    } catch (e) { histErr = String(e); }
+    finally { histLoading = false; }
+  }
+  $effect(() => { if (tab === 'history') { showTmp; loadHistory(); } });
+  const liveIds = $derived(new Set(sessions.map((s) => s.host + ' ' + s.sessionId)));
+  const histRows = $derived(
+    hist.flatMap((h) => (h.history ?? []).map((r) => ({ ...r, host: h.name })))
+      .filter((r) => !histFilter || (r.cwd ?? r.project).toLowerCase().includes(histFilter.toLowerCase()))
+      .sort((a, b) => b.lastMs - a.lastMs)
+  );
+  // One card per project (host + working directory): session names are unique per run (`<project>-<n>`), so the
+  // project is the stable thing that sessions share.
+  const histGroups = $derived.by(() => {
+    const m = new Map();
+    for (const r of histRows) {
+      const cwd = r.cwd ?? r.project;
+      const key = r.host + ' ' + cwd;
+      if (!m.has(key)) m.set(key, { key, cwd, host: r.host, name: cwd.split('/').filter(Boolean).pop() || cwd, rows: [], live: 0, firstMs: Infinity });
+      const g = m.get(key);
+      g.rows.push(r);
+      if (liveIds.has(r.host + ' ' + r.sessionId)) g.live++;
+      g.firstMs = Math.min(g.firstMs, r.first ? Date.parse(r.first) : r.lastMs);
+    }
+    return [...m.values()];
+  });
+  let group = $state(null);
+  const groupSel = $derived(histGroups.find((g) => g.key === group));
+  const hiddenTmp = $derived(hist.reduce((n, h) => n + (h.hiddenTmp ?? 0), 0));
+  const span = (r) => {
+    const a = r.first ? Date.parse(r.first) : null;
+    return a ? dur(Math.max(0, Math.round((r.lastMs - a) / 1000))) : '–';
+  };
+  const stamp = (ms) => new Date(ms).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  const mb = (b) => (b >= 1e6 ? (b / 1e6).toFixed(1) + ' MB' : Math.max(1, Math.round(b / 1e3)) + ' KB');
+
   async function poll() {
     try {
       const r = await fetch('/api/snapshot');
@@ -92,25 +141,65 @@
 
   {#if error}<p class="banner">Server unreachable: {error}</p>{/if}
 
+  <div class="toolbar">
+    <nav class="tabs" aria-label="View">
+      <button class:on={tab === 'live'} onclick={() => (tab = 'live')}>Live</button>
+      <button class:on={tab === 'history'} onclick={() => (tab = 'history')}>History</button>
+    </nav>
+    {#if tab === 'live'}
+    <section class="hosts">
+      {#each hosts as h (h.name)}
+        <div class="chip" class:down={!h.ok}>
+          <span class="dot {h.ok ? h.disk.level : 'critical'}"></span>
+          <b>{h.name}</b>
+          {#if h.ok}
+            <span class="mut">{h.sessions.length} sessions · {h.disk.freeGB} GB free{h.plan?.fiveHour ? ` · 5h ${h.plan.fiveHour.pct}%` : ''}{h.plan?.sevenDay ? ` · 7d ${h.plan.sevenDay.pct}%` : ''}{(h.jobs ?? []).length ? ` · ${h.jobs.length} codex job${h.jobs.length > 1 ? 's' : ''}` : ''}</span>
+          {:else}
+            <span class="crit">unreachable: {h.error}</span>
+          {/if}
+        </div>
+      {/each}
+    </section>
+    {/if}
+  </div>
+
+  {#if tab === 'history'}
+    <section class="hist">
+      <div class="hbar">
+        <input type="search" placeholder="Filter by project path" bind:value={histFilter} aria-label="Filter history" />
+        <label><input type="checkbox" bind:checked={showTmp} /> show temp-dir sessions{!showTmp && hiddenTmp ? ` (${hiddenTmp} hidden)` : ''}</label>
+      </div>
+      {#if histErr}<p class="err">Could not load history: {histErr}</p>{/if}
+      {#each hist.filter((h) => !h.ok) as h}<p class="err">{h.name}: {h.error}</p>{/each}
+      {#if histLoading && !hist.length}<p class="mut">Reading transcripts…</p>{/if}
+      <div class="grid">
+        {#each histGroups as g (g.key)}
+          <article class="card" role="button" tabindex="0" onclick={() => (group = g.key)}
+            onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); group = g.key; } }}>
+            <div class="top">
+              <h2 title={g.cwd}>{g.name}</h2>
+              {#if g.live}<span class="badge busy">{g.live} live</span>{/if}
+            </div>
+            <p class="path" title={g.cwd}>{short(g.cwd)}</p>
+            <dl>
+              <div><dt>Host</dt><dd>{g.host}</dd></div>
+              <div><dt>Sessions</dt><dd>{g.rows.length}</dd></div>
+              <div><dt>Last activity</dt><dd>{stamp(g.rows[0].lastMs)}</dd></div>
+              <div><dt>First seen</dt><dd>{stamp(g.firstMs)}</dd></div>
+            </dl>
+          </article>
+        {:else}
+          {#if !histLoading}<p class="empty">No past sessions.</p>{/if}
+        {/each}
+      </div>
+      {#if hist.some((h) => h.capped)}<p class="note">Showing the most recent sessions per host only.</p>{/if}
+    </section>
+  {:else}
   <section class="stats">
     <div class="stat"><span class="n">{totals.sessions}</span><span class="l">sessions{totals.subs ? ` (+${totals.subs} sub)` : ''}</span></div>
     <div class="stat busy"><span class="n">{totals.busy}</span><span class="l">busy</span></div>
     <div class="stat"><span class="n">{totals.agents}</span><span class="l">agents running</span></div>
     <div class="stat" class:alert={totals.attention}><span class="n">{totals.attention}</span><span class="l">need attention</span></div>
-  </section>
-
-  <section class="hosts">
-    {#each hosts as h (h.name)}
-      <div class="chip" class:down={!h.ok}>
-        <span class="dot {h.ok ? h.disk.level : 'critical'}"></span>
-        <b>{h.name}</b>
-        {#if h.ok}
-          <span class="mut">{h.sessions.length} sessions · {h.disk.freeGB} GB free{h.plan?.fiveHour ? ` · 5h ${h.plan.fiveHour.pct}%` : ''}{h.plan?.sevenDay ? ` · 7d ${h.plan.sevenDay.pct}%` : ''}{(h.jobs ?? []).length ? ` · ${h.jobs.length} codex job${h.jobs.length > 1 ? 's' : ''}` : ''}</span>
-        {:else}
-          <span class="crit">unreachable: {h.error}</span>
-        {/if}
-      </div>
-    {/each}
   </section>
 
   <section class="grid">
@@ -165,16 +254,45 @@
       <p class="empty">No live sessions.</p>
     {/each}
   </section>
+  {/if}
 
 </main>
 
-<svelte:window onkeydown={(e) => { if (e.key === 'Escape' && selected) closeDetail(); }} />
+<svelte:window onkeydown={(e) => { if (e.key === 'Escape') { if (selected) closeDetail(); else if (group) group = null; } }} />
+
+{#if groupSel}
+  <div class="scrim" onclick={() => (group = null)} role="presentation"></div>
+  <aside class="panel" role="dialog" aria-modal="true" aria-label="Session history">
+    <header class="phead">
+      <div>
+        <h2>{groupSel.name}</h2>
+        <p class="path">{short(groupSel.cwd)} · {groupSel.host}</p>
+      </div>
+      <button class="close" onclick={() => (group = null)} aria-label="Close history">✕</button>
+    </header>
+    <p class="note">{groupSel.rows.length} session{groupSel.rows.length > 1 ? 's' : ''}, newest first. Click one for its totals.</p>
+    <ul class="hlist">
+      {#each groupSel.rows as r (r.sessionId)}
+        <li>
+          <button class="hrow" onclick={() => openDetail(r)}>
+            <span class="hmain">
+              <b>{stamp(r.lastMs)}</b>
+              {#if liveIds.has(r.host + ' ' + r.sessionId)}<span class="badge busy">live</span>{/if}
+              <span class="mut path-inline">{r.branch ?? ''}</span>
+            </span>
+            <span class="mut hmeta">{span(r)} · {mb(r.bytes)}</span>
+          </button>
+        </li>
+      {/each}
+    </ul>
+  </aside>
+{/if}
 
 {#if selected}
   {@const row = sessions.find((x) => x.host === selected.host && x.sessionId === selected.sessionId)}
   {@const plan = hosts.find((h) => h.name === selected.host)?.plan}
-  <div class="scrim" onclick={closeDetail} role="presentation"></div>
-  <aside class="panel" role="dialog" aria-modal="true" aria-label="Session details">
+  <div class="scrim above" onclick={closeDetail} role="presentation"></div>
+  <aside class="panel above" role="dialog" aria-modal="true" aria-label="Session details">
     <header class="phead">
       <div>
         <h2>{row?.name ?? 'Session ended'}</h2>
@@ -298,7 +416,7 @@
   .sub { margin:2px 0 0; color:var(--mut); font-size:13px; }
   .banner { background:#3a1618; border:1px solid var(--crit); color:var(--crit); padding:8px 12px; border-radius:10px; }
 
-  .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin:20px 0 12px; }
+  .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin:12px 0 20px; }
   .stat { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px 16px; display:flex; flex-direction:column; }
   .stat .n { font-size:30px; font-weight:650; font-variant-numeric:tabular-nums; line-height:1.1; }
   .stat .l { color:var(--mut); font-size:12px; text-transform:uppercase; letter-spacing:.06em; margin-top:4px; }
@@ -306,7 +424,7 @@
   .stat.alert { border-color:var(--crit); background:#2a1417; }
   .stat.alert .n { color:var(--crit); }
 
-  .hosts { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:20px; }
+  .hosts { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:8px; }
   .chip { display:flex; align-items:center; gap:8px; background:var(--card); border:1px solid var(--line); border-radius:999px; padding:5px 14px 5px 10px; }
   .chip.down { border-color:var(--crit); }
   .mut { color:var(--mut); } .crit { color:var(--crit); }
@@ -361,5 +479,23 @@
   .bv { text-align:right; color:var(--mut); font-variant-numeric:tabular-nums; }
   .why { margin:12px 0 0; padding:8px 10px; border-radius:8px; background:#2a2113; color:var(--warn); font-size:12px; }
   .empty { color:var(--mut); }
+  .scrim.above { z-index:12; } .panel.above { z-index:13; }
+  .toolbar { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px 16px; margin:16px 0 4px; }
+  .tabs { display:flex; gap:6px; }
+  .tabs button { background:none; border:1px solid var(--line); color:var(--mut); border-radius:999px; padding:5px 16px; cursor:pointer; font:inherit; }
+  .tabs button.on { color:var(--fg); background:var(--card2); border-color:#35405a; }
+  .hist { margin-top:12px; }
+  .hbar { display:flex; flex-wrap:wrap; gap:14px; align-items:center; margin-bottom:12px; color:var(--mut); }
+  .hbar input[type=search] { background:var(--card); border:1px solid var(--line); color:var(--fg); border-radius:8px; padding:6px 10px; min-width:240px; font:inherit; }
+  .hlist { list-style:none; margin:0; padding:0; display:grid; gap:6px; }
+  .hrow { width:100%; text-align:left; display:flex; justify-content:space-between; gap:16px; align-items:center; background:var(--card); border:1px solid var(--line);
+    border-radius:10px; padding:10px 14px; color:var(--fg); font:inherit; cursor:pointer; }
+  .hrow:hover { border-color:#35405a; }
+  .hmain { display:flex; align-items:center; gap:10px; min-width:0; }
+  .hmain b { white-space:nowrap; }
+  .path-inline { font:12px ui-monospace, SFMono-Regular, Menlo, monospace; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .hmeta { font-size:12px; white-space:nowrap; font-variant-numeric:tabular-nums; }
+  .err { color:var(--crit); }
+  @media (max-width:640px) { .hrow { flex-direction:column; align-items:flex-start; gap:4px; } }
   @media (max-width:420px) { .grid { grid-template-columns:1fr; } }
 </style>

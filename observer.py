@@ -3,6 +3,8 @@
 
   GET /api/snapshot               every host's sessions
   GET /api/detail?host=H&id=SID   one session's totals (parsed on demand, cached 30 s)
+  GET /api/history[?tmp=1]        every host's past sessions from their transcripts (temp-dir sessions hidden
+                                  unless tmp=1; cached 30 s)
 
 The local host is read in-process through collector/snapshot.py. A host with an "ssh" entry in hosts.json gets
 the same file piped to `python3 -` over `ssh -o BatchMode=yes`, so nothing is installed there. Read-only: it
@@ -50,21 +52,29 @@ def load_hosts():
 HOSTS = load_hosts()
 
 
-def collect(h, detail_id=None, timeout=15):
-    """One host's snapshot (or one session's detail) as a dict; a failure becomes {ok: false, error}."""
+def collect(h, detail_id=None, timeout=15, history=None):
+    """One host's snapshot (or one session's detail, or its history: history is "" or "tmp") as a dict;
+    a failure becomes {ok: false, error}."""
     err = "no output"
     try:
         if h.get("ssh"):
             cmd = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5", h["ssh"], "python3", "-"]
             if detail_id:
                 cmd += ["--detail", detail_id]
+            if history is not None:
+                cmd += ["--history"] + ([history] if history else [])
             p = subprocess.run(cmd, input=SCRIPT, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                universal_newlines=True, timeout=timeout)
             err = (p.stderr.strip().splitlines() or ["no output"])[-1]
             data = json.loads(p.stdout)
         else:
             with LOCAL_LOCK:
-                data = collector.detail(detail_id) if detail_id else collector.snapshot()
+                if history is not None:
+                    data = collector.history(include_tmp=history == "tmp")
+                elif detail_id:
+                    data = collector.detail(detail_id)
+                else:
+                    data = collector.snapshot()
         data["name"], data["ok"] = h["name"], True
         return data
     except subprocess.TimeoutExpired:
@@ -99,6 +109,23 @@ def detail(h, sid):
     return e["result"] or {"name": h["name"], "ok": False, "error": "no result", "sessions": []}
 
 
+_history = {}
+
+
+def history(include_tmp):
+    """Every host's history, cached briefly: it stats and partly reads hundreds of transcripts per host."""
+    key = "tmp" if include_tmp else ""
+    with _detail_lock:
+        e = _history.get(key)
+        if e and time.time() - e["at"] < DETAIL_TTL_S:
+            return e["result"]
+    with ThreadPoolExecutor(max_workers=max(1, len(HOSTS))) as ex:
+        result = {"hosts": list(ex.map(lambda h: collect(h, timeout=40, history=key), HOSTS))}
+    with _detail_lock:
+        _history[key] = {"at": time.time(), "result": result}
+    return result
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *args):
         pass
@@ -120,6 +147,8 @@ class Handler(BaseHTTPRequestHandler):
         if url.path == "/api/snapshot":
             with ThreadPoolExecutor(max_workers=max(1, len(HOSTS))) as ex:
                 return self.json({"hosts": list(ex.map(collect, HOSTS))})
+        if url.path == "/api/history":
+            return self.json(history((parse_qs(url.query).get("tmp") or [""])[0] == "1"))
         if url.path == "/api/detail":
             q = parse_qs(url.query)
             h = next((x for x in HOSTS if x["name"] == (q.get("host") or [""])[0]), None)

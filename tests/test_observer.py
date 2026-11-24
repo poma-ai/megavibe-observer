@@ -32,6 +32,11 @@ def setUpModule():
     with open(os.path.join(home, ".claude", "projects", "p", SID + ".jsonl"), "w") as f:
         for d in (line, line, line2):        # one reply is written as several lines with the same id
             f.write(json.dumps(d) + "\n")
+    for proj, sid, cwd in (("-x-real", "hist-real", "/x/real"), ("-x-scratch", "hist-tmp", "/tmp/scratch"),
+                           ("-private-tmp-claude-w", "hist-tmpdir", None)):
+        os.makedirs(os.path.join(home, ".claude", "projects", proj), exist_ok=True)
+        with open(os.path.join(home, ".claude", "projects", proj, sid + ".jsonl"), "w") as f:
+            f.write(json.dumps({"type": "user", "cwd": cwd, "gitBranch": "main", "timestamp": "2026-11-23T09:00:00.000Z"}) + "\n")
     dist = os.path.join(TMP, "dist")
     os.makedirs(os.path.join(dist, "assets"))
     with open(os.path.join(dist, "index.html"), "w") as f:
@@ -78,6 +83,23 @@ class Observer(unittest.TestCase):
         self.assertIn("fake", [s["name"] for s in local["sessions"]])
         self.assertFalse(far["ok"])
         self.assertIn("Permission denied", far["error"])     # the remote's last stderr line, not a crash
+
+    def test_history_hides_temp_dir_sessions_unless_asked(self):
+        observer._history.clear()
+        local = json.loads(get("/api/history")[2])["hosts"][0]
+        ids = {r["sessionId"]: r for r in local["history"]}
+        self.assertIn("hist-real", ids)
+        self.assertEqual(ids["hist-real"]["cwd"], "/x/real")
+        self.assertEqual(ids["hist-real"]["branch"], "main")
+        self.assertNotIn("hist-tmp", ids)                        # cwd under /tmp
+        self.assertNotIn("hist-tmpdir", ids)                     # project dir of a temp cwd
+        self.assertEqual(local["hiddenTmp"], 2)
+        all_ids = {r["sessionId"] for r in json.loads(get("/api/history?tmp=1")[2])["hosts"][0]["history"]}
+        self.assertTrue({"hist-tmp", "hist-tmpdir"} <= all_ids)
+
+    def test_remote_history_failure_is_reported(self):
+        far = json.loads(get("/api/history")[2])["hosts"][1]
+        self.assertFalse(far["ok"])
 
     def test_detail_validates_its_input(self):
         self.assertEqual(get("/api/detail?host=local&id=x;y")[0], 400)

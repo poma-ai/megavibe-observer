@@ -36,8 +36,8 @@ The local host is read in-process. For a host with `ssh`, the server pipes `coll
 
 ## How it works
 
-- `observer.py` serves `ui/dist`, `/api/snapshot` (all hosts) and `/api/detail?host=…&id=…` (one session, parsed on demand and cached 30 s).
-- `collector/snapshot.py` builds one host's snapshot. `--detail <session id>` parses one session's transcript and subagent logs for the click-through panel.
+- `observer.py` serves `ui/dist`, `/api/snapshot` (all hosts) and `/api/detail?host=…&id=…` (one session, parsed on demand and cached 30 s), and `/api/history[?tmp=1]` (past sessions per host, cached 30 s).
+- `collector/snapshot.py` builds one host's snapshot. `--detail <session id>` parses one session's transcript and subagent logs for the click-through panel. `--history [tmp]` lists past sessions from transcript stat plus the first 64 KB of each; sessions whose cwd is a temp directory are hidden unless `tmp` is given.
 - `ui/` is Svelte 5 + Vite.
 
 Tests: `python3 -m unittest discover -s tests`.
