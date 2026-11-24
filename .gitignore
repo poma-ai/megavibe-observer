@@ -16,3 +16,8 @@ venv/
 coverage/
 .env
 .env.*
+CLAUDE.local.md
+events.jsonl
+.claude
+.agent
+megavibe-deliverables
