@@ -34,6 +34,17 @@ Copy `hosts.example.json` to `hosts.json` and list them:
 
 The local host is read in-process. For a host with `ssh`, the server pipes `collector/snapshot.py` to `python3` there over `ssh -o BatchMode=yes`. Without a `hosts.json` it watches the local machine only.
 
+## Menu bar (macOS, optional)
+
+A [SwiftBar](https://github.com/swiftbar/SwiftBar) plugin shows the live sessions in the menu bar. Each line opens the web UI. A notification fires when a session waits for input, hits a permission prompt or sits on a host with critically low disk, and fires again only after that session recovered.
+
+```
+brew install swiftbar
+ln -s "$PWD/menubar/megavibe-observer.5s.py" "<your SwiftBar plugin folder>/"
+```
+
+`observer.py` must be running (the plugin shows "Observer offline" otherwise). Set `OBSERVER_URL` in the plugin's settings if you use another port. Notifications are sent by `osascript`, so macOS attributes them to Script Editor: allow that app in System Settings, Notifications. Clicking a notification does not open the UI.
+
 ## How it works
 
 - `observer.py` serves `ui/dist`, `/api/snapshot` (all hosts) and `/api/detail?host=…&id=…` (one session, parsed on demand and cached 30 s), and `/api/history[?tmp=1]` (past sessions per host, cached 30 s).
