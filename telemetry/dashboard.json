@@ -495,7 +495,7 @@
   },
   {
    "id": 11,
-   "type": "bargauge",
+   "type": "table",
    "title": "Where tool time goes (total seconds by tool)",
    "description": "Sum of tool durations. Optimise the top entries first: p95 shows spikes, this shows what actually costs wall-clock.",
    "datasource": {
@@ -509,7 +509,7 @@
       "type": "loki",
       "uid": "loki"
      },
-     "expr": "sort_desc(sum by (tool_name) (sum_over_time({service_name=\"claude-code\"} | event_name=\"tool_result\" | host_name=~\"$host\" | session_id=~\"$session\" | unwrap duration_ms [$__range]))) / 1000",
+     "expr": "sum by (tool_name) (sum_over_time({service_name=\"claude-code\"} | event_name=\"tool_result\" | host_name=~\"$host\" | session_id=~\"$session\" | unwrap duration_ms [$__range])) / 1000",
      "legendFormat": "{{tool_name}}",
      "queryType": "instant"
     }
@@ -522,18 +522,61 @@
    },
    "fieldConfig": {
     "defaults": {
-     "unit": "s"
+     "custom": {
+      "align": "auto"
+     }
     },
-    "overrides": []
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Seconds"
+      },
+      "properties": [
+       {
+        "id": "decimals",
+        "value": 1
+       }
+      ]
+     }
+    ]
    },
+   "transformations": [
+    {
+     "id": "labelsToFields",
+     "options": {
+      "mode": "columns"
+     }
+    },
+    {
+     "id": "merge",
+     "options": {}
+    },
+    {
+     "id": "organize",
+     "options": {
+      "excludeByName": {
+       "Time": true
+      },
+      "renameByName": {
+       "Value #A": "Seconds"
+      }
+     }
+    }
+   ],
    "options": {
-    "orientation": "horizontal",
-    "displayMode": "gradient"
+    "showHeader": true,
+    "sortBy": [
+     {
+      "displayName": "Seconds",
+      "desc": true
+     }
+    ]
    }
   },
   {
    "id": 12,
-   "type": "bargauge",
+   "type": "table",
    "title": "Where model time goes (total seconds by model)",
    "description": "",
    "datasource": {
@@ -547,7 +590,7 @@
       "type": "loki",
       "uid": "loki"
      },
-     "expr": "sort_desc(sum by (model) (sum_over_time({service_name=\"claude-code\"} | event_name=\"api_request\" | host_name=~\"$host\" | session_id=~\"$session\" | unwrap duration_ms [$__range]))) / 1000",
+     "expr": "sum by (model) (sum_over_time({service_name=\"claude-code\"} | event_name=\"api_request\" | host_name=~\"$host\" | session_id=~\"$session\" | unwrap duration_ms [$__range])) / 1000",
      "legendFormat": "{{model}}",
      "queryType": "instant"
     }
@@ -560,13 +603,56 @@
    },
    "fieldConfig": {
     "defaults": {
-     "unit": "s"
+     "custom": {
+      "align": "auto"
+     }
     },
-    "overrides": []
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Seconds"
+      },
+      "properties": [
+       {
+        "id": "decimals",
+        "value": 1
+       }
+      ]
+     }
+    ]
    },
+   "transformations": [
+    {
+     "id": "labelsToFields",
+     "options": {
+      "mode": "columns"
+     }
+    },
+    {
+     "id": "merge",
+     "options": {}
+    },
+    {
+     "id": "organize",
+     "options": {
+      "excludeByName": {
+       "Time": true
+      },
+      "renameByName": {
+       "Value #A": "Seconds"
+      }
+     }
+    }
+   ],
    "options": {
-    "orientation": "horizontal",
-    "displayMode": "gradient"
+    "showHeader": true,
+    "sortBy": [
+     {
+      "displayName": "Seconds",
+      "desc": true
+     }
+    ]
    }
   },
   {
@@ -1209,7 +1295,7 @@
   },
   {
    "id": 25,
-   "type": "bargauge",
+   "type": "table",
    "title": "Rejected, by tool and source (why blocked)",
    "description": "Each bar is a tool that was refused and who refused it. config rejects mean a deny rule or a missing allow rule in non-interactive mode.",
    "datasource": {
@@ -1223,7 +1309,7 @@
       "type": "loki",
       "uid": "loki"
      },
-     "expr": "sort_desc(sum by (tool_name, source) (count_over_time({service_name=\"claude-code\"} | event_name=\"tool_decision\" | host_name=~\"$host\" | session_id=~\"$session\" | decision=\"reject\"[$__range])))",
+     "expr": "sum by (tool_name, source) (count_over_time({service_name=\"claude-code\"} | event_name=\"tool_decision\" | host_name=~\"$host\" | session_id=~\"$session\" | decision=\"reject\"[$__range]))",
      "legendFormat": "{{tool_name}} / {{source}}",
      "queryType": "instant"
     }
@@ -1236,18 +1322,48 @@
    },
    "fieldConfig": {
     "defaults": {
-     "unit": "short"
+     "custom": {
+      "align": "auto"
+     }
     },
     "overrides": []
    },
+   "transformations": [
+    {
+     "id": "labelsToFields",
+     "options": {
+      "mode": "columns"
+     }
+    },
+    {
+     "id": "merge",
+     "options": {}
+    },
+    {
+     "id": "organize",
+     "options": {
+      "excludeByName": {
+       "Time": true
+      },
+      "renameByName": {
+       "Value #A": "Rejected"
+      }
+     }
+    }
+   ],
    "options": {
-    "orientation": "horizontal",
-    "displayMode": "gradient"
+    "showHeader": true,
+    "sortBy": [
+     {
+      "displayName": "Rejected",
+      "desc": true
+     }
+    ]
    }
   },
   {
    "id": 26,
-   "type": "bargauge",
+   "type": "table",
    "title": "Permissions you were asked for (by tool)",
    "description": "Candidates for an allow rule in settings: frequent, always accepted, low risk.",
    "datasource": {
@@ -1261,7 +1377,7 @@
       "type": "loki",
       "uid": "loki"
      },
-     "expr": "sort_desc(sum by (tool_name) (count_over_time({service_name=\"claude-code\"} | event_name=\"tool_decision\" | host_name=~\"$host\" | session_id=~\"$session\" | source=~\"user.*\"[$__range])))",
+     "expr": "sum by (tool_name) (count_over_time({service_name=\"claude-code\"} | event_name=\"tool_decision\" | host_name=~\"$host\" | session_id=~\"$session\" | source=~\"user.*\"[$__range]))",
      "legendFormat": "{{tool_name}}",
      "queryType": "instant"
     }
@@ -1274,18 +1390,48 @@
    },
    "fieldConfig": {
     "defaults": {
-     "unit": "short"
+     "custom": {
+      "align": "auto"
+     }
     },
     "overrides": []
    },
+   "transformations": [
+    {
+     "id": "labelsToFields",
+     "options": {
+      "mode": "columns"
+     }
+    },
+    {
+     "id": "merge",
+     "options": {}
+    },
+    {
+     "id": "organize",
+     "options": {
+      "excludeByName": {
+       "Time": true
+      },
+      "renameByName": {
+       "Value #A": "Asked"
+      }
+     }
+    }
+   ],
    "options": {
-    "orientation": "horizontal",
-    "displayMode": "gradient"
+    "showHeader": true,
+    "sortBy": [
+     {
+      "displayName": "Asked",
+      "desc": true
+     }
+    ]
    }
   },
   {
    "id": 27,
-   "type": "bargauge",
+   "type": "table",
    "title": "Interruptions: accepted by hand, by tool",
    "description": "user_temporary = allow once (asked again next time); user_permanent = saved rule. Many user_temporary on one tool = add a rule.",
    "datasource": {
@@ -1299,7 +1445,7 @@
       "type": "loki",
       "uid": "loki"
      },
-     "expr": "sort_desc(sum by (tool_name, source) (count_over_time({service_name=\"claude-code\"} | event_name=\"tool_decision\" | host_name=~\"$host\" | session_id=~\"$session\" | decision=\"accept\" | source=~\"user.*\"[$__range])))",
+     "expr": "sum by (tool_name, source) (count_over_time({service_name=\"claude-code\"} | event_name=\"tool_decision\" | host_name=~\"$host\" | session_id=~\"$session\" | decision=\"accept\" | source=~\"user.*\"[$__range]))",
      "legendFormat": "{{tool_name}} / {{source}}",
      "queryType": "instant"
     }
@@ -1312,13 +1458,43 @@
    },
    "fieldConfig": {
     "defaults": {
-     "unit": "short"
+     "custom": {
+      "align": "auto"
+     }
     },
     "overrides": []
    },
+   "transformations": [
+    {
+     "id": "labelsToFields",
+     "options": {
+      "mode": "columns"
+     }
+    },
+    {
+     "id": "merge",
+     "options": {}
+    },
+    {
+     "id": "organize",
+     "options": {
+      "excludeByName": {
+       "Time": true
+      },
+      "renameByName": {
+       "Value #A": "Count"
+      }
+     }
+    }
+   ],
    "options": {
-    "orientation": "horizontal",
-    "displayMode": "gradient"
+    "showHeader": true,
+    "sortBy": [
+     {
+      "displayName": "Count",
+      "desc": true
+     }
+    ]
    }
   },
   {
@@ -1379,6 +1555,224 @@
    }
   },
   {
+   "id": 48,
+   "type": "table",
+   "title": "Blocked calls: one row per rejected call (latest first)",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "description": "Every rejected tool decision. Blocked by: hook = a hook such as block-dangerous-bash, config = a permission rule, user = you declined. Command = the binary, Full command = what was attempted, Claude's note = the description Claude gave for the call, Mode = permission mode of the session. Skill and file calls show their parameters in the last column. Command text needs OTEL_LOG_TOOL_DETAILS=1 and exists only for sessions started after it was set; a hook's own reason text is not exported. Commands can contain secrets: local Loki only.",
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     },
+     "queryType": "range",
+     "maxLines": 200,
+     "expr": "{service_name=\"claude-code\"} | event_name=\"tool_decision\" | decision=\"reject\" | host_name=~\"$host\" | session_id=~\"$session\""
+    }
+   ],
+   "gridPos": {
+    "h": 9,
+    "w": 24,
+    "x": 0,
+    "y": 61
+   },
+   "transformations": [
+    {
+     "id": "extractFields",
+     "options": {
+      "source": "labels",
+      "format": "json"
+     }
+    },
+    {
+     "id": "extractFields",
+     "options": {
+      "source": "tool_parameters",
+      "format": "json"
+     }
+    },
+    {
+     "id": "organize",
+     "options": {
+      "includeByName": {
+       "event_timestamp": true,
+       "session_id": true,
+       "tool_name": true,
+       "source": true,
+       "permission_mode": true,
+       "bash_command": true,
+       "full_command": true,
+       "description": true,
+       "skill_name": true,
+       "file_path": true,
+       "tool_parameters": true
+      },
+      "excludeByName": {
+       "tool_parameters": true
+      },
+      "indexByName": {
+       "event_timestamp": 0,
+       "session_id": 1,
+       "tool_name": 2,
+       "source": 3,
+       "permission_mode": 4,
+       "bash_command": 5,
+       "full_command": 6,
+       "description": 7,
+       "skill_name": 8,
+       "file_path": 9,
+       "tool_parameters": 10
+      },
+      "renameByName": {
+       "event_timestamp": "Time",
+       "session_id": "Session",
+       "tool_name": "Tool",
+       "source": "Blocked by",
+       "permission_mode": "Mode",
+       "bash_command": "Command",
+       "full_command": "Full command",
+       "description": "Claude's note",
+       "skill_name": "Skill",
+       "file_path": "File"
+      }
+     }
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "custom": {
+      "align": "auto",
+      "cellOptions": {
+       "type": "auto"
+      },
+      "wrapText": true,
+      "inspect": true
+     }
+    },
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Time"
+      },
+      "properties": [
+       {
+        "id": "custom.width",
+        "value": 200
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Session"
+      },
+      "properties": [
+       {
+        "id": "custom.width",
+        "value": 350
+       },
+       {
+        "id": "custom.wrapText",
+        "value": false
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Tool"
+      },
+      "properties": [
+       {
+        "id": "custom.width",
+        "value": 70
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Blocked by"
+      },
+      "properties": [
+       {
+        "id": "custom.width",
+        "value": 100
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Mode"
+      },
+      "properties": [
+       {
+        "id": "custom.width",
+        "value": 170
+       },
+       {
+        "id": "custom.wrapText",
+        "value": false
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Command"
+      },
+      "properties": [
+       {
+        "id": "custom.width",
+        "value": 90
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Skill"
+      },
+      "properties": [
+       {
+        "id": "custom.width",
+        "value": 90
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "File"
+      },
+      "properties": [
+       {
+        "id": "custom.width",
+        "value": 200
+       }
+      ]
+     }
+    ]
+   },
+   "options": {
+    "showHeader": true,
+    "sortBy": [
+     {
+      "displayName": "Time",
+      "desc": true
+     }
+    ],
+    "cellHeight": "auto"
+   }
+  },
+  {
    "id": 29,
    "type": "row",
    "title": "Your input: how often and how heavy",
@@ -1387,7 +1781,7 @@
     "h": 1,
     "w": 24,
     "x": 0,
-    "y": 61
+    "y": 70
    },
    "panels": []
   },
@@ -1416,7 +1810,7 @@
     "h": 7,
     "w": 8,
     "x": 0,
-    "y": 62
+    "y": 71
    },
    "fieldConfig": {
     "defaults": {
@@ -1473,7 +1867,7 @@
     "h": 7,
     "w": 8,
     "x": 8,
-    "y": 62
+    "y": 71
    },
    "fieldConfig": {
     "defaults": {
@@ -1530,7 +1924,7 @@
     "h": 7,
     "w": 8,
     "x": 16,
-    "y": 62
+    "y": 71
    },
    "fieldConfig": {
     "defaults": {
@@ -1587,7 +1981,7 @@
     "h": 7,
     "w": 8,
     "x": 0,
-    "y": 69
+    "y": 78
    },
    "fieldConfig": {
     "defaults": {
@@ -1644,7 +2038,7 @@
     "h": 7,
     "w": 8,
     "x": 8,
-    "y": 69
+    "y": 78
    },
    "fieldConfig": {
     "defaults": {
@@ -1702,7 +2096,7 @@
     "h": 7,
     "w": 8,
     "x": 16,
-    "y": 69
+    "y": 78
    },
    "fieldConfig": {
     "defaults": {
@@ -1736,7 +2130,7 @@
   },
   {
    "id": 43,
-   "type": "bargauge",
+   "type": "table",
    "title": "Skills used (selected range)",
    "description": "Needs OTEL_LOG_TOOL_DETAILS=1 on the client; without it tool_parameters is absent and this stays empty. Counts every Skill tool decision (accepted and rejected). Only sessions started with the flag are counted.",
    "datasource": {
@@ -1759,24 +2153,47 @@
     "h": 7,
     "w": 12,
     "x": 0,
-    "y": 76
+    "y": 85
    },
    "fieldConfig": {
     "defaults": {
-     "unit": "short",
-     "min": 0
+     "custom": {
+      "align": "auto"
+     }
     },
     "overrides": []
    },
-   "options": {
-    "orientation": "horizontal",
-    "displayMode": "gradient",
-    "reduceOptions": {
-     "calcs": [
-      "lastNotNull"
-     ],
-     "values": false
+   "transformations": [
+    {
+     "id": "labelsToFields",
+     "options": {
+      "mode": "columns"
+     }
+    },
+    {
+     "id": "merge",
+     "options": {}
+    },
+    {
+     "id": "organize",
+     "options": {
+      "excludeByName": {
+       "Time": true
+      },
+      "renameByName": {
+       "Value #A": "Uses"
+      }
+     }
     }
+   ],
+   "options": {
+    "showHeader": true,
+    "sortBy": [
+     {
+      "displayName": "Uses",
+      "desc": true
+     }
+    ]
    }
   },
   {
@@ -1804,7 +2221,7 @@
     "h": 7,
     "w": 12,
     "x": 12,
-    "y": 76
+    "y": 85
    },
    "fieldConfig": {
     "defaults": {
@@ -1837,13 +2254,13 @@
   },
   {
    "id": 45,
-   "type": "bargauge",
-   "title": "Prompts by session",
-   "description": "User prompts per session in the selected range. Needs OTEL_METRICS_INCLUDE_SESSION_ID=true on the client; sessions started before that carry no session_id and are not listed.",
+   "type": "table",
+   "title": "Sessions (selected range)",
    "datasource": {
     "type": "loki",
     "uid": "loki"
    },
+   "description": "One row per session id (the Claude session uuid, as listed in the observer UI). Needs OTEL_METRICS_INCLUDE_SESSION_ID=true on the client; sessions that started before that or have no events in the range are not listed. Cost is an estimate from list prices.",
    "targets": [
     {
      "refId": "A",
@@ -1851,123 +2268,114 @@
       "type": "loki",
       "uid": "loki"
      },
-     "expr": "sum by (session_id) (count_over_time({service_name=\"claude-code\"} | event_name=\"user_prompt\" | host_name=~\"$host\" | session_id=~\"$session\" | session_id!=\"\"[$__range]))",
-     "legendFormat": "{{session_id}}",
-     "queryType": "instant"
-    }
-   ],
-   "gridPos": {
-    "h": 7,
-    "w": 8,
-    "x": 0,
-    "y": 83
-   },
-   "fieldConfig": {
-    "defaults": {
-     "unit": "short",
-     "min": 0
+     "expr": "sum by (session_id) (count_over_time({service_name=\"claude-code\"} | event_name=\"user_prompt\" | host_name=~\"$host\" | session_id=~\"$session\" | session_id!=\"\" [$__range]))",
+     "queryType": "instant",
+     "legendFormat": ""
     },
-    "overrides": []
-   },
-   "options": {
-    "orientation": "horizontal",
-    "displayMode": "gradient",
-    "reduceOptions": {
-     "calcs": [
-      "lastNotNull"
-     ],
-     "values": false
-    }
-   }
-  },
-  {
-   "id": 46,
-   "type": "bargauge",
-   "title": "Tool calls by session",
-   "description": "Tool results per session in the selected range. Needs OTEL_METRICS_INCLUDE_SESSION_ID=true on the client; sessions started before that carry no session_id and are not listed.",
-   "datasource": {
-    "type": "loki",
-    "uid": "loki"
-   },
-   "targets": [
     {
-     "refId": "A",
+     "refId": "B",
      "datasource": {
       "type": "loki",
       "uid": "loki"
      },
-     "expr": "sum by (session_id) (count_over_time({service_name=\"claude-code\"} | event_name=\"tool_result\" | host_name=~\"$host\" | session_id=~\"$session\" | session_id!=\"\"[$__range]))",
-     "legendFormat": "{{session_id}}",
-     "queryType": "instant"
-    }
-   ],
-   "gridPos": {
-    "h": 7,
-    "w": 8,
-    "x": 8,
-    "y": 83
-   },
-   "fieldConfig": {
-    "defaults": {
-     "unit": "short",
-     "min": 0
+     "expr": "sum by (session_id) (count_over_time({service_name=\"claude-code\"} | event_name=\"tool_result\" | host_name=~\"$host\" | session_id=~\"$session\" | session_id!=\"\" [$__range]))",
+     "queryType": "instant",
+     "legendFormat": ""
     },
-    "overrides": []
-   },
-   "options": {
-    "orientation": "horizontal",
-    "displayMode": "gradient",
-    "reduceOptions": {
-     "calcs": [
-      "lastNotNull"
-     ],
-     "values": false
-    }
-   }
-  },
-  {
-   "id": 47,
-   "type": "bargauge",
-   "title": "Cost by session (USD)",
-   "description": "Cost per session in the selected range. Needs OTEL_METRICS_INCLUDE_SESSION_ID=true on the client; sessions started before that carry no session_id and are not listed. Source: cost_usd on api_request events (Loki), an estimate from list prices, not billing. The Prometheus cost counter was not used because concurrent processes shared one series and overcounted about 14x.",
-   "datasource": {
-    "type": "loki",
-    "uid": "loki"
-   },
-   "targets": [
     {
-     "refId": "A",
+     "refId": "C",
      "datasource": {
       "type": "loki",
       "uid": "loki"
      },
      "expr": "sum by (session_id) (sum_over_time({service_name=\"claude-code\"} | event_name=\"api_request\" | host_name=~\"$host\" | session_id=~\"$session\" | session_id!=\"\" | unwrap cost_usd [$__range]))",
-     "legendFormat": "{{session_id}}",
-     "queryType": "instant"
+     "queryType": "instant",
+     "legendFormat": ""
+    }
+   ],
+   "transformations": [
+    {
+     "id": "labelsToFields",
+     "options": {
+      "mode": "columns"
+     }
+    },
+    {
+     "id": "merge",
+     "options": {}
+    },
+    {
+     "id": "organize",
+     "options": {
+      "excludeByName": {
+       "Time": true
+      },
+      "renameByName": {
+       "session_id": "Session",
+       "Value #A": "Prompts",
+       "Value #B": "Tool calls",
+       "Value #C": "Cost (USD)"
+      },
+      "indexByName": {
+       "session_id": 0,
+       "Value #A": 1,
+       "Value #B": 2,
+       "Value #C": 3
+      }
+     }
     }
    ],
    "gridPos": {
-    "h": 7,
-    "w": 8,
-    "x": 16,
-    "y": 83
+    "h": 8,
+    "w": 24,
+    "x": 0,
+    "y": 92
    },
    "fieldConfig": {
     "defaults": {
-     "unit": "currencyUSD",
-     "min": 0
+     "custom": {
+      "align": "auto"
+     }
     },
-    "overrides": []
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Cost (USD)"
+      },
+      "properties": [
+       {
+        "id": "unit",
+        "value": "currencyUSD"
+       },
+       {
+        "id": "decimals",
+        "value": 2
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Session"
+      },
+      "properties": [
+       {
+        "id": "custom.width",
+        "value": 330
+       }
+      ]
+     }
+    ]
    },
    "options": {
-    "orientation": "horizontal",
-    "displayMode": "gradient",
-    "reduceOptions": {
-     "calcs": [
-      "lastNotNull"
-     ],
-     "values": false
-    }
+    "showHeader": true,
+    "sortBy": [
+     {
+      "displayName": "Cost (USD)",
+      "desc": true
+     }
+    ]
    }
   },
   {
@@ -1979,7 +2387,7 @@
     "h": 1,
     "w": 24,
     "x": 0,
-    "y": 90
+    "y": 100
    },
    "panels": []
   },
@@ -2008,7 +2416,7 @@
     "h": 7,
     "w": 8,
     "x": 0,
-    "y": 91
+    "y": 101
    },
    "fieldConfig": {
     "defaults": {
@@ -2065,7 +2473,7 @@
     "h": 7,
     "w": 8,
     "x": 8,
-    "y": 91
+    "y": 101
    },
    "fieldConfig": {
     "defaults": {
@@ -2122,7 +2530,7 @@
     "h": 7,
     "w": 8,
     "x": 16,
-    "y": 91
+    "y": 101
    },
    "fieldConfig": {
     "defaults": {
@@ -2179,7 +2587,7 @@
     "h": 7,
     "w": 8,
     "x": 0,
-    "y": 98
+    "y": 108
    },
    "fieldConfig": {
     "defaults": {
@@ -2236,7 +2644,7 @@
     "h": 7,
     "w": 8,
     "x": 8,
-    "y": 98
+    "y": 108
    },
    "fieldConfig": {
     "defaults": {
@@ -2293,7 +2701,7 @@
     "h": 7,
     "w": 8,
     "x": 16,
-    "y": 98
+    "y": 108
    },
    "fieldConfig": {
     "defaults": {
