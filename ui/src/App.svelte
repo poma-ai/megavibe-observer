@@ -1,4 +1,6 @@
 <script>
+  // Grafana from telemetry/metrics.sh; same port as METRICS_GRAFANA_PORT there. The host follows the page so remote access works through the same name.
+  const metricsUrl = `http://${location.hostname}:47430/d/megavibe-agents`;
   let hosts = $state([]);
   let error = $state(null);
   let fetchedAt = $state(null);
@@ -141,6 +143,7 @@
       <h1>Megavibe Observer</h1>
       <p class="sub">{fetchedAt ? 'updated ' + age(fetchedAt) + ' ago' : 'connecting…'}</p>
     </div>
+    <a class="metrics" href={metricsUrl} target="_blank" rel="noopener noreferrer">Metrics ↗</a>
   </header>
 
   {#if error}<p class="banner">Server unreachable: {error}</p>{/if}
@@ -430,6 +433,9 @@
   :global(body) { margin:0; background:radial-gradient(1200px 600px at 20% -10%, #17203a 0%, var(--bg) 60%) fixed; color:var(--fg); font:14px/1.45 system-ui, -apple-system, sans-serif; }
   main { max-width:1200px; margin:0 auto; padding:24px 16px 40px; }
   h1 { font-size:22px; margin:0; letter-spacing:-.01em; }
+  main > header { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
+  .metrics { color:var(--mut); border:1px solid var(--line); border-radius:999px; padding:5px 14px; text-decoration:none; font-size:13px; }
+  .metrics:hover { color:var(--fg); background:var(--card2); border-color:#35405a; }
   .sub { margin:2px 0 0; color:var(--mut); font-size:13px; }
   .banner { background:#3a1618; border:1px solid var(--crit); color:var(--crit); padding:8px 12px; border-radius:10px; }
 

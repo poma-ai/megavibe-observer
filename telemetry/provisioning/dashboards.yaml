@@ -1,0 +1,7 @@
+apiVersion: 1
+providers:
+  - name: megavibe
+    type: file
+    allowUiUpdates: true
+    options:
+      path: /megavibe/dashboard.json

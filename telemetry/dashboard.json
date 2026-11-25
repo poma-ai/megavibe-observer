@@ -1,0 +1,2329 @@
+{
+ "uid": "megavibe-agents",
+ "title": "Agent telemetry: Claude Code and Codex",
+ "tags": [
+  "megavibe",
+  "telemetry"
+ ],
+ "schemaVersion": 39,
+ "version": 1,
+ "time": {
+  "from": "now-24h",
+  "to": "now"
+ },
+ "refresh": "1m",
+ "timezone": "browser",
+ "editable": true,
+ "templating": {
+  "list": [
+   {
+    "name": "host",
+    "label": "Host",
+    "type": "query",
+    "datasource": {
+     "type": "prometheus",
+     "uid": "prometheus"
+    },
+    "includeAll": true,
+    "multi": true,
+    "allValue": ".*",
+    "current": {
+     "text": "All",
+     "value": "$__all"
+    },
+    "query": {
+     "query": "label_values(host_name)",
+     "refId": "host"
+    },
+    "definition": "label_values(host_name)",
+    "refresh": 2
+   },
+   {
+    "name": "session",
+    "label": "Session",
+    "type": "query",
+    "datasource": {
+     "type": "prometheus",
+     "uid": "prometheus"
+    },
+    "includeAll": true,
+    "multi": true,
+    "allValue": ".*",
+    "current": {
+     "text": "All",
+     "value": "$__all"
+    },
+    "query": {
+     "query": "label_values(claude_code_session_count_total, session_id)",
+     "refId": "session"
+    },
+    "definition": "label_values(claude_code_session_count_total, session_id)",
+    "refresh": 2
+   }
+  ]
+ },
+ "panels": [
+  {
+   "id": 1,
+   "type": "row",
+   "title": "Overview (selected range)",
+   "collapsed": false,
+   "gridPos": {
+    "h": 1,
+    "w": 24,
+    "x": 0,
+    "y": 0
+   },
+   "panels": []
+  },
+  {
+   "id": 2,
+   "type": "stat",
+   "title": "User prompts",
+   "description": "Prompts typed by you (or sent by -p/SDK). One prompt triggers many API calls and tool calls.",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     },
+     "expr": "sum(count_over_time({service_name=\"claude-code\"} | event_name=\"user_prompt\" | host_name=~\"$host\" | session_id=~\"$session\"[$__range]))",
+     "legendFormat": "",
+     "queryType": "instant"
+    }
+   ],
+   "gridPos": {
+    "h": 4,
+    "w": 4,
+    "x": 0,
+    "y": 1
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ]
+    },
+    "colorMode": "value"
+   }
+  },
+  {
+   "id": 3,
+   "type": "stat",
+   "title": "Tool calls",
+   "description": "",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     },
+     "expr": "sum(count_over_time({service_name=\"claude-code\"} | event_name=\"tool_result\" | host_name=~\"$host\" | session_id=~\"$session\"[$__range]))",
+     "legendFormat": "",
+     "queryType": "instant"
+    }
+   ],
+   "gridPos": {
+    "h": 4,
+    "w": 4,
+    "x": 4,
+    "y": 1
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ]
+    },
+    "colorMode": "value"
+   }
+  },
+  {
+   "id": 4,
+   "type": "stat",
+   "title": "Rejected permissions",
+   "description": "",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     },
+     "expr": "sum(count_over_time({service_name=\"claude-code\"} | event_name=\"tool_decision\" | host_name=~\"$host\" | session_id=~\"$session\" | decision=\"reject\"[$__range])) or vector(0)",
+     "legendFormat": "",
+     "queryType": "instant"
+    }
+   ],
+   "gridPos": {
+    "h": 4,
+    "w": 4,
+    "x": 8,
+    "y": 1
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       },
+       {
+        "color": "orange",
+        "value": 1
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ]
+    },
+    "colorMode": "value"
+   }
+  },
+  {
+   "id": 5,
+   "type": "stat",
+   "title": "Reject rate",
+   "description": "Rejected tool decisions / all tool decisions.",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     },
+     "expr": "sum(count_over_time({service_name=\"claude-code\"} | event_name=\"tool_decision\" | host_name=~\"$host\" | session_id=~\"$session\" | decision=\"reject\"[$__range])) / sum(count_over_time({service_name=\"claude-code\"} | event_name=\"tool_decision\" | host_name=~\"$host\" | session_id=~\"$session\"[$__range]))",
+     "legendFormat": "",
+     "queryType": "instant"
+    }
+   ],
+   "gridPos": {
+    "h": 4,
+    "w": 4,
+    "x": 12,
+    "y": 1
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percentunit"
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ]
+    },
+    "colorMode": "value"
+   }
+  },
+  {
+   "id": 6,
+   "type": "stat",
+   "title": "Cost (USD)",
+   "description": "Estimated from API pricing; plan limits are metered differently. Source: cost_usd on api_request events (Loki), an estimate from list prices, not billing. The Prometheus cost counter was not used because concurrent processes shared one series and overcounted about 14x.",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     },
+     "expr": "sum(sum_over_time({service_name=\"claude-code\"} | event_name=\"api_request\" | host_name=~\"$host\" | session_id=~\"$session\" | unwrap cost_usd [$__range]))",
+     "legendFormat": "",
+     "instant": true,
+     "range": false,
+     "queryType": "instant"
+    }
+   ],
+   "gridPos": {
+    "h": 4,
+    "w": 4,
+    "x": 16,
+    "y": 1
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "currencyUSD"
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ]
+    },
+    "colorMode": "value"
+   }
+  },
+  {
+   "id": 7,
+   "type": "stat",
+   "title": "API errors",
+   "description": "",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     },
+     "expr": "sum(count_over_time({service_name=\"claude-code\"} | event_name=\"api_error\" | host_name=~\"$host\" | session_id=~\"$session\"[$__range])) or vector(0)",
+     "legendFormat": "",
+     "queryType": "instant"
+    }
+   ],
+   "gridPos": {
+    "h": 4,
+    "w": 4,
+    "x": 20,
+    "y": 1
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       },
+       {
+        "color": "red",
+        "value": 1
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ]
+    },
+    "colorMode": "value"
+   }
+  },
+  {
+   "id": 8,
+   "type": "row",
+   "title": "Latency: tools and models",
+   "collapsed": false,
+   "gridPos": {
+    "h": 1,
+    "w": 24,
+    "x": 0,
+    "y": 5
+   },
+   "panels": []
+  },
+  {
+   "id": 9,
+   "type": "timeseries",
+   "title": "Tool latency p95 by tool",
+   "description": "tool_result.duration_ms. Includes execution only; time spent waiting on you is not in here.",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     },
+     "expr": "quantile_over_time(0.95, {service_name=\"claude-code\"} | event_name=\"tool_result\" | host_name=~\"$host\" | session_id=~\"$session\" | unwrap duration_ms [$__auto]) by (tool_name)",
+     "legendFormat": "{{tool_name}}",
+     "queryType": "range"
+    }
+   ],
+   "gridPos": {
+    "h": 8,
+    "w": 12,
+    "x": 0,
+    "y": 6
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "ms",
+     "custom": {
+      "lineWidth": 1,
+      "fillOpacity": 5,
+      "showPoints": "never",
+      "spanNulls": true,
+      "stacking": {
+       "mode": "none"
+      }
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "bottom",
+     "calcs": [
+      "mean",
+      "max"
+     ]
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   }
+  },
+  {
+   "id": 10,
+   "type": "timeseries",
+   "title": "API request latency p50 / p95 by model",
+   "description": "api_request.duration_ms: full model response time, includes output generation. Compare with the output-tokens panel before blaming a model.",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     },
+     "expr": "quantile_over_time(0.5, {service_name=\"claude-code\"} | event_name=\"api_request\" | host_name=~\"$host\" | session_id=~\"$session\" | unwrap duration_ms [$__auto]) by (model)",
+     "legendFormat": "p50 {{model}}",
+     "queryType": "range"
+    },
+    {
+     "refId": "B",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     },
+     "expr": "quantile_over_time(0.95, {service_name=\"claude-code\"} | event_name=\"api_request\" | host_name=~\"$host\" | session_id=~\"$session\" | unwrap duration_ms [$__auto]) by (model)",
+     "legendFormat": "p95 {{model}}",
+     "queryType": "range"
+    }
+   ],
+   "gridPos": {
+    "h": 8,
+    "w": 12,
+    "x": 12,
+    "y": 6
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "ms",
+     "custom": {
+      "lineWidth": 1,
+      "fillOpacity": 5,
+      "showPoints": "never",
+      "spanNulls": true,
+      "stacking": {
+       "mode": "none"
+      }
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "bottom",
+     "calcs": [
+      "mean",
+      "max"
+     ]
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   }
+  },
+  {
+   "id": 11,
+   "type": "bargauge",
+   "title": "Where tool time goes (total seconds by tool)",
+   "description": "Sum of tool durations. Optimise the top entries first: p95 shows spikes, this shows what actually costs wall-clock.",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     },
+     "expr": "sort_desc(sum by (tool_name) (sum_over_time({service_name=\"claude-code\"} | event_name=\"tool_result\" | host_name=~\"$host\" | session_id=~\"$session\" | unwrap duration_ms [$__range]))) / 1000",
+     "legendFormat": "{{tool_name}}",
+     "queryType": "instant"
+    }
+   ],
+   "gridPos": {
+    "h": 8,
+    "w": 8,
+    "x": 0,
+    "y": 14
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "s"
+    },
+    "overrides": []
+   },
+   "options": {
+    "orientation": "horizontal",
+    "displayMode": "gradient"
+   }
+  },
+  {
+   "id": 12,
+   "type": "bargauge",
+   "title": "Where model time goes (total seconds by model)",
+   "description": "",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     },
+     "expr": "sort_desc(sum by (model) (sum_over_time({service_name=\"claude-code\"} | event_name=\"api_request\" | host_name=~\"$host\" | session_id=~\"$session\" | unwrap duration_ms [$__range]))) / 1000",
+     "legendFormat": "{{model}}",
+     "queryType": "instant"
+    }
+   ],
+   "gridPos": {
+    "h": 8,
+    "w": 8,
+    "x": 8,
+    "y": 14
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "s"
+    },
+    "overrides": []
+   },
+   "options": {
+    "orientation": "horizontal",
+    "displayMode": "gradient"
+   }
+  },
+  {
+   "id": 13,
+   "type": "table",
+   "title": "Tool latency summary (calls, avg ms, p95 ms, failures)",
+   "description": "",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "refId": "calls",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     },
+     "expr": "sum by (tool_name) (count_over_time({service_name=\"claude-code\"} | event_name=\"tool_result\" | host_name=~\"$host\" | session_id=~\"$session\"[$__range]))",
+     "legendFormat": "",
+     "queryType": "instant"
+    },
+    {
+     "refId": "avg",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     },
+     "expr": "avg by (tool_name) (avg_over_time({service_name=\"claude-code\"} | event_name=\"tool_result\" | host_name=~\"$host\" | session_id=~\"$session\" | unwrap duration_ms [$__range]))",
+     "legendFormat": "",
+     "queryType": "instant"
+    },
+    {
+     "refId": "p95",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     },
+     "expr": "quantile_over_time(0.95, {service_name=\"claude-code\"} | event_name=\"tool_result\" | host_name=~\"$host\" | session_id=~\"$session\" | unwrap duration_ms [$__range]) by (tool_name)",
+     "legendFormat": "",
+     "queryType": "instant"
+    },
+    {
+     "refId": "fail",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     },
+     "expr": "sum by (tool_name) (count_over_time({service_name=\"claude-code\"} | event_name=\"tool_result\" | host_name=~\"$host\" | session_id=~\"$session\" | success=\"false\"[$__range])) or vector(0)",
+     "legendFormat": "",
+     "queryType": "instant"
+    }
+   ],
+   "gridPos": {
+    "h": 8,
+    "w": 8,
+    "x": 16,
+    "y": 14
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "options": {
+    "showHeader": true
+   }
+  },
+  {
+   "id": 14,
+   "type": "timeseries",
+   "title": "Slowest single tool calls (max ms by tool)",
+   "description": "Outliers: hung commands, slow MCP servers, big reads.",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     },
+     "expr": "max_over_time({service_name=\"claude-code\"} | event_name=\"tool_result\" | host_name=~\"$host\" | session_id=~\"$session\" | unwrap duration_ms [$__auto]) by (tool_name)",
+     "legendFormat": "{{tool_name}}",
+     "queryType": "range"
+    }
+   ],
+   "gridPos": {
+    "h": 7,
+    "w": 12,
+    "x": 0,
+    "y": 22
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "ms",
+     "custom": {
+      "lineWidth": 1,
+      "fillOpacity": 5,
+      "showPoints": "never",
+      "spanNulls": true,
+      "stacking": {
+       "mode": "none"
+      }
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "bottom",
+     "calcs": [
+      "mean",
+      "max"
+     ]
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   }
+  },
+  {
+   "id": 15,
+   "type": "timeseries",
+   "title": "MCP server connect time",
+   "description": "Startup cost of MCP servers; failures show as status != connected.",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     },
+     "expr": "max_over_time({service_name=\"claude-code\"} | event_name=\"mcp_server_connection\" | host_name=~\"$host\" | session_id=~\"$session\" | unwrap duration_ms [$__auto]) by (transport_type, status)",
+     "legendFormat": "{{transport_type}} {{status}}",
+     "queryType": "range"
+    }
+   ],
+   "gridPos": {
+    "h": 7,
+    "w": 12,
+    "x": 12,
+    "y": 22
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "ms",
+     "custom": {
+      "lineWidth": 1,
+      "fillOpacity": 5,
+      "showPoints": "never",
+      "spanNulls": true,
+      "stacking": {
+       "mode": "none"
+      }
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "bottom",
+     "calcs": [
+      "mean",
+      "max"
+     ]
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   }
+  },
+  {
+   "id": 16,
+   "type": "row",
+   "title": "Models: usage and efficiency",
+   "collapsed": false,
+   "gridPos": {
+    "h": 1,
+    "w": 24,
+    "x": 0,
+    "y": 29
+   },
+   "panels": []
+  },
+  {
+   "id": 17,
+   "type": "timeseries",
+   "title": "API requests by model",
+   "description": "",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     },
+     "expr": "sum by (model) (count_over_time({service_name=\"claude-code\"} | event_name=\"api_request\" | host_name=~\"$host\" | session_id=~\"$session\"[$__auto]))",
+     "legendFormat": "{{model}}",
+     "queryType": "range"
+    }
+   ],
+   "gridPos": {
+    "h": 7,
+    "w": 8,
+    "x": 0,
+    "y": 30
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "custom": {
+      "lineWidth": 1,
+      "fillOpacity": 15,
+      "showPoints": "never",
+      "spanNulls": true,
+      "stacking": {
+       "mode": "normal"
+      }
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "bottom",
+     "calcs": [
+      "mean",
+      "max"
+     ]
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   }
+  },
+  {
+   "id": 18,
+   "type": "timeseries",
+   "title": "Cost by model (USD)",
+   "description": " Source: cost_usd on api_request events (Loki), an estimate from list prices, not billing. The Prometheus cost counter was not used because concurrent processes shared one series and overcounted about 14x.",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     },
+     "expr": "sum by (model) (sum_over_time({service_name=\"claude-code\"} | event_name=\"api_request\" | host_name=~\"$host\" | session_id=~\"$session\" | unwrap cost_usd [$__auto]))",
+     "legendFormat": "{{model}}",
+     "instant": false,
+     "range": true,
+     "queryType": "range"
+    }
+   ],
+   "gridPos": {
+    "h": 7,
+    "w": 8,
+    "x": 8,
+    "y": 30
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "currencyUSD",
+     "custom": {
+      "lineWidth": 1,
+      "fillOpacity": 15,
+      "showPoints": "never",
+      "spanNulls": true,
+      "stacking": {
+       "mode": "normal"
+      }
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "bottom",
+     "calcs": [
+      "mean",
+      "max"
+     ]
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   }
+  },
+  {
+   "id": 19,
+   "type": "timeseries",
+   "title": "Tokens by model and type",
+   "description": " Source: token fields on api_request events (Loki). The Prometheus token counter was not used because concurrent processes shared one series and overcounted.",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     },
+     "expr": "sum by (model) (sum_over_time({service_name=\"claude-code\"} | event_name=\"api_request\" | host_name=~\"$host\" | session_id=~\"$session\" | unwrap input_tokens [$__auto]))",
+     "legendFormat": "{{model}} input",
+     "queryType": "range"
+    },
+    {
+     "refId": "B",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     },
+     "expr": "sum by (model) (sum_over_time({service_name=\"claude-code\"} | event_name=\"api_request\" | host_name=~\"$host\" | session_id=~\"$session\" | unwrap output_tokens [$__auto]))",
+     "legendFormat": "{{model}} output",
+     "queryType": "range"
+    },
+    {
+     "refId": "C",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     },
+     "expr": "sum by (model) (sum_over_time({service_name=\"claude-code\"} | event_name=\"api_request\" | host_name=~\"$host\" | session_id=~\"$session\" | unwrap cache_read_tokens [$__auto]))",
+     "legendFormat": "{{model}} cacheRead",
+     "queryType": "range"
+    },
+    {
+     "refId": "D",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     },
+     "expr": "sum by (model) (sum_over_time({service_name=\"claude-code\"} | event_name=\"api_request\" | host_name=~\"$host\" | session_id=~\"$session\" | unwrap cache_creation_tokens [$__auto]))",
+     "legendFormat": "{{model}} cacheCreation",
+     "queryType": "range"
+    }
+   ],
+   "gridPos": {
+    "h": 7,
+    "w": 8,
+    "x": 16,
+    "y": 30
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "custom": {
+      "lineWidth": 1,
+      "fillOpacity": 15,
+      "showPoints": "never",
+      "spanNulls": true,
+      "stacking": {
+       "mode": "normal"
+      }
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "bottom",
+     "calcs": [
+      "mean",
+      "max"
+     ]
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   }
+  },
+  {
+   "id": 20,
+   "type": "timeseries",
+   "title": "Cache hit ratio by model",
+   "description": "cache_read / (cache_read + cache_creation + uncached input). Low values mean cold caches (idle gaps, model switches) and slower, costlier turns.",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     },
+     "expr": "sum by (model) (sum_over_time({service_name=\"claude-code\"} | event_name=\"api_request\" | host_name=~\"$host\" | session_id=~\"$session\" | unwrap cache_read_tokens [$__auto])) / (sum by (model) (sum_over_time({service_name=\"claude-code\"} | event_name=\"api_request\" | host_name=~\"$host\" | session_id=~\"$session\" | unwrap cache_read_tokens [$__auto])) + sum by (model) (sum_over_time({service_name=\"claude-code\"} | event_name=\"api_request\" | host_name=~\"$host\" | session_id=~\"$session\" | unwrap cache_creation_tokens [$__auto])) + sum by (model) (sum_over_time({service_name=\"claude-code\"} | event_name=\"api_request\" | host_name=~\"$host\" | session_id=~\"$session\" | unwrap input_tokens [$__auto])))",
+     "legendFormat": "{{model}}",
+     "queryType": "range"
+    }
+   ],
+   "gridPos": {
+    "h": 7,
+    "w": 8,
+    "x": 0,
+    "y": 37
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percentunit",
+     "custom": {
+      "lineWidth": 1,
+      "fillOpacity": 5,
+      "showPoints": "never",
+      "spanNulls": true,
+      "stacking": {
+       "mode": "none"
+      }
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "bottom",
+     "calcs": [
+      "mean",
+      "max"
+     ]
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   }
+  },
+  {
+   "id": 21,
+   "type": "timeseries",
+   "title": "Output tokens per second by model",
+   "description": "Throughput proxy. Includes time-to-first-token, so short outputs look slow.",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     },
+     "expr": "sum by (model) (sum_over_time({service_name=\"claude-code\"} | event_name=\"api_request\" | host_name=~\"$host\" | session_id=~\"$session\" | unwrap output_tokens [$__auto])) / (sum by (model) (sum_over_time({service_name=\"claude-code\"} | event_name=\"api_request\" | host_name=~\"$host\" | session_id=~\"$session\" | unwrap duration_ms [$__auto])) / 1000)",
+     "legendFormat": "{{model}}",
+     "queryType": "range"
+    }
+   ],
+   "gridPos": {
+    "h": 7,
+    "w": 8,
+    "x": 8,
+    "y": 37
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "custom": {
+      "lineWidth": 1,
+      "fillOpacity": 5,
+      "showPoints": "never",
+      "spanNulls": true,
+      "stacking": {
+       "mode": "none"
+      }
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "bottom",
+     "calcs": [
+      "mean",
+      "max"
+     ]
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   }
+  },
+  {
+   "id": 22,
+   "type": "timeseries",
+   "title": "Effort level mix (requests)",
+   "description": "Higher effort costs latency; check it matches the task.",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     },
+     "expr": "sum by (effort) (count_over_time({service_name=\"claude-code\"} | event_name=\"api_request\" | host_name=~\"$host\" | session_id=~\"$session\"[$__auto]))",
+     "legendFormat": "{{effort}}",
+     "queryType": "range"
+    }
+   ],
+   "gridPos": {
+    "h": 7,
+    "w": 8,
+    "x": 16,
+    "y": 37
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "custom": {
+      "lineWidth": 1,
+      "fillOpacity": 15,
+      "showPoints": "never",
+      "spanNulls": true,
+      "stacking": {
+       "mode": "normal"
+      }
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "bottom",
+     "calcs": [
+      "mean",
+      "max"
+     ]
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   }
+  },
+  {
+   "id": 23,
+   "type": "row",
+   "title": "Blocked: permissions and decisions",
+   "collapsed": false,
+   "gridPos": {
+    "h": 1,
+    "w": 24,
+    "x": 0,
+    "y": 44
+   },
+   "panels": []
+  },
+  {
+   "id": 24,
+   "type": "timeseries",
+   "title": "Tool decisions by outcome and source",
+   "description": "source: config = allow/deny rule matched, user_temporary / user_permanent = you were asked, hook = a hook decided. Anything that is not config costs you an interruption.",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     },
+     "expr": "sum by (decision, source) (count_over_time({service_name=\"claude-code\"} | event_name=\"tool_decision\" | host_name=~\"$host\" | session_id=~\"$session\"[$__auto]))",
+     "legendFormat": "{{decision}} via {{source}}",
+     "queryType": "range"
+    }
+   ],
+   "gridPos": {
+    "h": 8,
+    "w": 12,
+    "x": 0,
+    "y": 45
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "custom": {
+      "lineWidth": 1,
+      "fillOpacity": 15,
+      "showPoints": "never",
+      "spanNulls": true,
+      "stacking": {
+       "mode": "normal"
+      }
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "bottom",
+     "calcs": [
+      "mean",
+      "max"
+     ]
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   }
+  },
+  {
+   "id": 25,
+   "type": "bargauge",
+   "title": "Rejected, by tool and source (why blocked)",
+   "description": "Each bar is a tool that was refused and who refused it. config rejects mean a deny rule or a missing allow rule in non-interactive mode.",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     },
+     "expr": "sort_desc(sum by (tool_name, source) (count_over_time({service_name=\"claude-code\"} | event_name=\"tool_decision\" | host_name=~\"$host\" | session_id=~\"$session\" | decision=\"reject\"[$__range])))",
+     "legendFormat": "{{tool_name}} / {{source}}",
+     "queryType": "instant"
+    }
+   ],
+   "gridPos": {
+    "h": 8,
+    "w": 12,
+    "x": 12,
+    "y": 45
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "options": {
+    "orientation": "horizontal",
+    "displayMode": "gradient"
+   }
+  },
+  {
+   "id": 26,
+   "type": "bargauge",
+   "title": "Permissions you were asked for (by tool)",
+   "description": "Candidates for an allow rule in settings: frequent, always accepted, low risk.",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     },
+     "expr": "sort_desc(sum by (tool_name) (count_over_time({service_name=\"claude-code\"} | event_name=\"tool_decision\" | host_name=~\"$host\" | session_id=~\"$session\" | source=~\"user.*\"[$__range])))",
+     "legendFormat": "{{tool_name}}",
+     "queryType": "instant"
+    }
+   ],
+   "gridPos": {
+    "h": 8,
+    "w": 8,
+    "x": 0,
+    "y": 53
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "options": {
+    "orientation": "horizontal",
+    "displayMode": "gradient"
+   }
+  },
+  {
+   "id": 27,
+   "type": "bargauge",
+   "title": "Interruptions: accepted by hand, by tool",
+   "description": "user_temporary = allow once (asked again next time); user_permanent = saved rule. Many user_temporary on one tool = add a rule.",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     },
+     "expr": "sort_desc(sum by (tool_name, source) (count_over_time({service_name=\"claude-code\"} | event_name=\"tool_decision\" | host_name=~\"$host\" | session_id=~\"$session\" | decision=\"accept\" | source=~\"user.*\"[$__range])))",
+     "legendFormat": "{{tool_name}} / {{source}}",
+     "queryType": "instant"
+    }
+   ],
+   "gridPos": {
+    "h": 8,
+    "w": 8,
+    "x": 8,
+    "y": 53
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "options": {
+    "orientation": "horizontal",
+    "displayMode": "gradient"
+   }
+  },
+  {
+   "id": 28,
+   "type": "timeseries",
+   "title": "Permission mode mix (tool decisions)",
+   "description": "",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     },
+     "expr": "sum by (permission_mode) (count_over_time({service_name=\"claude-code\"} | event_name=\"tool_decision\" | host_name=~\"$host\" | session_id=~\"$session\"[$__auto]))",
+     "legendFormat": "{{permission_mode}}",
+     "queryType": "range"
+    }
+   ],
+   "gridPos": {
+    "h": 8,
+    "w": 8,
+    "x": 16,
+    "y": 53
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "custom": {
+      "lineWidth": 1,
+      "fillOpacity": 15,
+      "showPoints": "never",
+      "spanNulls": true,
+      "stacking": {
+       "mode": "normal"
+      }
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "bottom",
+     "calcs": [
+      "mean",
+      "max"
+     ]
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   }
+  },
+  {
+   "id": 29,
+   "type": "row",
+   "title": "Your input: how often and how heavy",
+   "collapsed": false,
+   "gridPos": {
+    "h": 1,
+    "w": 24,
+    "x": 0,
+    "y": 61
+   },
+   "panels": []
+  },
+  {
+   "id": 30,
+   "type": "timeseries",
+   "title": "User prompts over time",
+   "description": "",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     },
+     "expr": "sum(count_over_time({service_name=\"claude-code\"} | event_name=\"user_prompt\" | host_name=~\"$host\" | session_id=~\"$session\"[$__auto]))",
+     "legendFormat": "prompts",
+     "queryType": "range"
+    }
+   ],
+   "gridPos": {
+    "h": 7,
+    "w": 8,
+    "x": 0,
+    "y": 62
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "custom": {
+      "lineWidth": 1,
+      "fillOpacity": 5,
+      "showPoints": "never",
+      "spanNulls": true,
+      "stacking": {
+       "mode": "none"
+      }
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "bottom",
+     "calcs": [
+      "mean",
+      "max"
+     ]
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   }
+  },
+  {
+   "id": 31,
+   "type": "timeseries",
+   "title": "Avg prompt length (chars)",
+   "description": "Content is never exported (prompt text is redacted). Very short prompts after a tool run usually mean approvals or nudges.",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     },
+     "expr": "avg(avg_over_time({service_name=\"claude-code\"} | event_name=\"user_prompt\" | host_name=~\"$host\" | session_id=~\"$session\" | unwrap prompt_length [$__auto]))",
+     "legendFormat": "avg length",
+     "queryType": "range"
+    }
+   ],
+   "gridPos": {
+    "h": 7,
+    "w": 8,
+    "x": 8,
+    "y": 62
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "custom": {
+      "lineWidth": 1,
+      "fillOpacity": 5,
+      "showPoints": "never",
+      "spanNulls": true,
+      "stacking": {
+       "mode": "none"
+      }
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "bottom",
+     "calcs": [
+      "mean",
+      "max"
+     ]
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   }
+  },
+  {
+   "id": 32,
+   "type": "timeseries",
+   "title": "Tool calls per user prompt",
+   "description": "High = the agent runs long unattended (good). Low and flat = you steer every step.",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     },
+     "expr": "sum(count_over_time({service_name=\"claude-code\"} | event_name=\"tool_result\" | host_name=~\"$host\" | session_id=~\"$session\"[$__auto])) / sum(count_over_time({service_name=\"claude-code\"} | event_name=\"user_prompt\" | host_name=~\"$host\" | session_id=~\"$session\"[$__auto]))",
+     "legendFormat": "tools/prompt",
+     "queryType": "range"
+    }
+   ],
+   "gridPos": {
+    "h": 7,
+    "w": 8,
+    "x": 16,
+    "y": 62
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "custom": {
+      "lineWidth": 1,
+      "fillOpacity": 5,
+      "showPoints": "never",
+      "spanNulls": true,
+      "stacking": {
+       "mode": "none"
+      }
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "bottom",
+     "calcs": [
+      "mean",
+      "max"
+     ]
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   }
+  },
+  {
+   "id": 33,
+   "type": "timeseries",
+   "title": "Tool-call failures by tool",
+   "description": "",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     },
+     "expr": "sum by (tool_name) (count_over_time({service_name=\"claude-code\"} | event_name=\"tool_result\" | host_name=~\"$host\" | session_id=~\"$session\" | success=\"false\"[$__auto]))",
+     "legendFormat": "{{tool_name}}",
+     "queryType": "range"
+    }
+   ],
+   "gridPos": {
+    "h": 7,
+    "w": 8,
+    "x": 0,
+    "y": 69
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "custom": {
+      "lineWidth": 1,
+      "fillOpacity": 15,
+      "showPoints": "never",
+      "spanNulls": true,
+      "stacking": {
+       "mode": "normal"
+      }
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "bottom",
+     "calcs": [
+      "mean",
+      "max"
+     ]
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   }
+  },
+  {
+   "id": 34,
+   "type": "timeseries",
+   "title": "API errors by status",
+   "description": "429/529 = rate limits or overload; retries add latency to every turn.",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     },
+     "expr": "sum by (status_code, error_type) (count_over_time({service_name=\"claude-code\"} | event_name=\"api_error\" | host_name=~\"$host\" | session_id=~\"$session\"[$__auto]))",
+     "legendFormat": "{{status_code}} {{error_type}}",
+     "queryType": "range"
+    }
+   ],
+   "gridPos": {
+    "h": 7,
+    "w": 8,
+    "x": 8,
+    "y": 69
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "custom": {
+      "lineWidth": 1,
+      "fillOpacity": 15,
+      "showPoints": "never",
+      "spanNulls": true,
+      "stacking": {
+       "mode": "normal"
+      }
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "bottom",
+     "calcs": [
+      "mean",
+      "max"
+     ]
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   }
+  },
+  {
+   "id": 35,
+   "type": "timeseries",
+   "title": "Active time (seconds) by host",
+   "description": "",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "expr": "sum by (host_name) (increase(claude_code_active_time_seconds_total{host_name=~\"$host\", session_id=~\"$session\"}[$__rate_interval]))",
+     "legendFormat": "{{host_name}}",
+     "instant": false,
+     "range": true
+    }
+   ],
+   "gridPos": {
+    "h": 7,
+    "w": 8,
+    "x": 16,
+    "y": 69
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "s",
+     "custom": {
+      "lineWidth": 1,
+      "fillOpacity": 5,
+      "showPoints": "never",
+      "spanNulls": true,
+      "stacking": {
+       "mode": "none"
+      }
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "bottom",
+     "calcs": [
+      "mean",
+      "max"
+     ]
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   }
+  },
+  {
+   "id": 43,
+   "type": "bargauge",
+   "title": "Skills used (selected range)",
+   "description": "Needs OTEL_LOG_TOOL_DETAILS=1 on the client; without it tool_parameters is absent and this stays empty. Counts every Skill tool decision (accepted and rejected). Only sessions started with the flag are counted.",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     },
+     "expr": "sum by (skill_name) (count_over_time({service_name=\"claude-code\"} | event_name=\"tool_decision\" | tool_name=\"Skill\" | host_name=~\"$host\" | session_id=~\"$session\" | line_format \"{{.tool_parameters}}\" | json skill_name=\"skill_name\" [$__range]))",
+     "legendFormat": "{{skill_name}}",
+     "queryType": "instant"
+    }
+   ],
+   "gridPos": {
+    "h": 7,
+    "w": 12,
+    "x": 0,
+    "y": 76
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "min": 0
+    },
+    "overrides": []
+   },
+   "options": {
+    "orientation": "horizontal",
+    "displayMode": "gradient",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "values": false
+    }
+   }
+  },
+  {
+   "id": 44,
+   "type": "timeseries",
+   "title": "Skill invocations over time",
+   "description": "Needs OTEL_LOG_TOOL_DETAILS=1 on the client; without it tool_parameters is absent and this stays empty. Counts every Skill tool decision (accepted and rejected). Only sessions started with the flag are counted.",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     },
+     "expr": "sum by (skill_name) (count_over_time({service_name=\"claude-code\"} | event_name=\"tool_decision\" | tool_name=\"Skill\" | host_name=~\"$host\" | session_id=~\"$session\" | line_format \"{{.tool_parameters}}\" | json skill_name=\"skill_name\" [$__auto]))",
+     "legendFormat": "{{skill_name}}",
+     "queryType": "range"
+    }
+   ],
+   "gridPos": {
+    "h": 7,
+    "w": 12,
+    "x": 12,
+    "y": 76
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "custom": {
+      "lineWidth": 1,
+      "fillOpacity": 15,
+      "showPoints": "never",
+      "spanNulls": true,
+      "stacking": {
+       "mode": "normal"
+      }
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "bottom",
+     "calcs": [
+      "sum"
+     ]
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   }
+  },
+  {
+   "id": 45,
+   "type": "bargauge",
+   "title": "Prompts by session",
+   "description": "User prompts per session in the selected range. Needs OTEL_METRICS_INCLUDE_SESSION_ID=true on the client; sessions started before that carry no session_id and are not listed.",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     },
+     "expr": "sum by (session_id) (count_over_time({service_name=\"claude-code\"} | event_name=\"user_prompt\" | host_name=~\"$host\" | session_id=~\"$session\" | session_id!=\"\"[$__range]))",
+     "legendFormat": "{{session_id}}",
+     "queryType": "instant"
+    }
+   ],
+   "gridPos": {
+    "h": 7,
+    "w": 8,
+    "x": 0,
+    "y": 83
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "min": 0
+    },
+    "overrides": []
+   },
+   "options": {
+    "orientation": "horizontal",
+    "displayMode": "gradient",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "values": false
+    }
+   }
+  },
+  {
+   "id": 46,
+   "type": "bargauge",
+   "title": "Tool calls by session",
+   "description": "Tool results per session in the selected range. Needs OTEL_METRICS_INCLUDE_SESSION_ID=true on the client; sessions started before that carry no session_id and are not listed.",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     },
+     "expr": "sum by (session_id) (count_over_time({service_name=\"claude-code\"} | event_name=\"tool_result\" | host_name=~\"$host\" | session_id=~\"$session\" | session_id!=\"\"[$__range]))",
+     "legendFormat": "{{session_id}}",
+     "queryType": "instant"
+    }
+   ],
+   "gridPos": {
+    "h": 7,
+    "w": 8,
+    "x": 8,
+    "y": 83
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "min": 0
+    },
+    "overrides": []
+   },
+   "options": {
+    "orientation": "horizontal",
+    "displayMode": "gradient",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "values": false
+    }
+   }
+  },
+  {
+   "id": 47,
+   "type": "bargauge",
+   "title": "Cost by session (USD)",
+   "description": "Cost per session in the selected range. Needs OTEL_METRICS_INCLUDE_SESSION_ID=true on the client; sessions started before that carry no session_id and are not listed. Source: cost_usd on api_request events (Loki), an estimate from list prices, not billing. The Prometheus cost counter was not used because concurrent processes shared one series and overcounted about 14x.",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     },
+     "expr": "sum by (session_id) (sum_over_time({service_name=\"claude-code\"} | event_name=\"api_request\" | host_name=~\"$host\" | session_id=~\"$session\" | session_id!=\"\" | unwrap cost_usd [$__range]))",
+     "legendFormat": "{{session_id}}",
+     "queryType": "instant"
+    }
+   ],
+   "gridPos": {
+    "h": 7,
+    "w": 8,
+    "x": 16,
+    "y": 83
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "currencyUSD",
+     "min": 0
+    },
+    "overrides": []
+   },
+   "options": {
+    "orientation": "horizontal",
+    "displayMode": "gradient",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "values": false
+    }
+   }
+  },
+  {
+   "id": 36,
+   "type": "row",
+   "title": "Codex (api_request, user_prompt, startup verified live; tool_result and tool_decision panels stay empty until a logged-in run)",
+   "collapsed": false,
+   "gridPos": {
+    "h": 1,
+    "w": 24,
+    "x": 0,
+    "y": 90
+   },
+   "panels": []
+  },
+  {
+   "id": 37,
+   "type": "timeseries",
+   "title": "Codex tool latency p95 by tool",
+   "description": "If empty after a real run: Explore Loki labels for service_name starting with codex, then fix event_name and the duration field.",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     },
+     "expr": "quantile_over_time(0.95, {service_name=~\"codex.*\"} | event_name=\"codex.tool_result\" | host_name=~\"$host\" | unwrap duration_ms [$__auto]) by (tool_name)",
+     "legendFormat": "{{tool_name}}",
+     "queryType": "range"
+    }
+   ],
+   "gridPos": {
+    "h": 7,
+    "w": 8,
+    "x": 0,
+    "y": 91
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "ms",
+     "custom": {
+      "lineWidth": 1,
+      "fillOpacity": 5,
+      "showPoints": "never",
+      "spanNulls": true,
+      "stacking": {
+       "mode": "none"
+      }
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "bottom",
+     "calcs": [
+      "mean",
+      "max"
+     ]
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   }
+  },
+  {
+   "id": 38,
+   "type": "timeseries",
+   "title": "Codex API request latency p95 by model",
+   "description": "",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     },
+     "expr": "quantile_over_time(0.95, {service_name=~\"codex.*\"} | event_name=\"codex.api_request\" | host_name=~\"$host\" | unwrap duration_ms [$__auto]) by (model)",
+     "legendFormat": "{{model}}",
+     "queryType": "range"
+    }
+   ],
+   "gridPos": {
+    "h": 7,
+    "w": 8,
+    "x": 8,
+    "y": 91
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "ms",
+     "custom": {
+      "lineWidth": 1,
+      "fillOpacity": 5,
+      "showPoints": "never",
+      "spanNulls": true,
+      "stacking": {
+       "mode": "none"
+      }
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "bottom",
+     "calcs": [
+      "mean",
+      "max"
+     ]
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   }
+  },
+  {
+   "id": 39,
+   "type": "timeseries",
+   "title": "Codex tool decisions",
+   "description": "",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     },
+     "expr": "sum by (decision, source) (count_over_time({service_name=~\"codex.*\"} | event_name=\"codex.tool_decision\" | host_name=~\"$host\"[$__auto]))",
+     "legendFormat": "{{decision}} via {{source}}",
+     "queryType": "range"
+    }
+   ],
+   "gridPos": {
+    "h": 7,
+    "w": 8,
+    "x": 16,
+    "y": 91
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "custom": {
+      "lineWidth": 1,
+      "fillOpacity": 15,
+      "showPoints": "never",
+      "spanNulls": true,
+      "stacking": {
+       "mode": "normal"
+      }
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "bottom",
+     "calcs": [
+      "mean",
+      "max"
+     ]
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   }
+  },
+  {
+   "id": 40,
+   "type": "timeseries",
+   "title": "Codex user prompts",
+   "description": "",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     },
+     "expr": "sum(count_over_time({service_name=~\"codex.*\"} | event_name=\"codex.user_prompt\" | host_name=~\"$host\"[$__auto]))",
+     "legendFormat": "prompts",
+     "queryType": "range"
+    }
+   ],
+   "gridPos": {
+    "h": 7,
+    "w": 8,
+    "x": 0,
+    "y": 98
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "custom": {
+      "lineWidth": 1,
+      "fillOpacity": 5,
+      "showPoints": "never",
+      "spanNulls": true,
+      "stacking": {
+       "mode": "none"
+      }
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "bottom",
+     "calcs": [
+      "mean",
+      "max"
+     ]
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   }
+  },
+  {
+   "id": 41,
+   "type": "timeseries",
+   "title": "Codex API errors by message",
+   "description": "e.g. http 401 = not logged in, 429 = rate limit.",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     },
+     "expr": "sum by (error_message) (count_over_time({service_name=~\"codex.*\"} | event_name=\"codex.api_request\" | host_name=~\"$host\" | error_message != \"\"[$__auto]))",
+     "legendFormat": "{{error_message}}",
+     "queryType": "range"
+    }
+   ],
+   "gridPos": {
+    "h": 7,
+    "w": 8,
+    "x": 8,
+    "y": 98
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "custom": {
+      "lineWidth": 1,
+      "fillOpacity": 15,
+      "showPoints": "never",
+      "spanNulls": true,
+      "stacking": {
+       "mode": "normal"
+      }
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "bottom",
+     "calcs": [
+      "mean",
+      "max"
+     ]
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   }
+  },
+  {
+   "id": 42,
+   "type": "timeseries",
+   "title": "Codex startup phase duration",
+   "description": "",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     },
+     "expr": "max_over_time({service_name=~\"codex.*\"} | event_name=\"codex.startup_phase\" | host_name=~\"$host\" | unwrap duration_ms [$__auto]) by (startup_phase)",
+     "legendFormat": "{{startup_phase}}",
+     "queryType": "range"
+    }
+   ],
+   "gridPos": {
+    "h": 7,
+    "w": 8,
+    "x": 16,
+    "y": 98
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "ms",
+     "custom": {
+      "lineWidth": 1,
+      "fillOpacity": 5,
+      "showPoints": "never",
+      "spanNulls": true,
+      "stacking": {
+       "mode": "none"
+      }
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "bottom",
+     "calcs": [
+      "mean",
+      "max"
+     ]
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   }
+  }
+ ]
+}

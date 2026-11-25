@@ -15,6 +15,7 @@ import html
 import json
 import os
 import shutil
+import socket
 import subprocess
 import sys
 import tempfile
@@ -28,6 +29,9 @@ SESSION = "megavibe-observer"   # tmux session the Start item creates: `tmux att
 SELF = os.path.realpath(__file__)
 ROOT = os.path.dirname(os.path.dirname(SELF))
 STATE = os.path.join(STATE_DIR, "megavibe-observer-notified.json")
+METRICS_PORT = int(os.environ.get("METRICS_GRAFANA_PORT", "47430"))   # same variable telemetry/metrics.sh reads
+METRICS_URL = "http://127.0.0.1:%d/d/megavibe-agents" % METRICS_PORT
+METRICS_SH = os.path.join(ROOT, "telemetry", "metrics.sh")
 
 
 def clean(v, n=60):
@@ -101,9 +105,39 @@ def start_args(url=URL):
     return ["new-session", "-d", "-s", SESSION, "-c", ROOT, "env PORT=%d %s observer.py" % (u.port, shutil.which("python3") or "python3")]
 
 
+def metrics_up():
+    """Grafana answers on its port. A TCP connect, not `docker ps`: the menu refreshes every 5 s and must not depend on the docker CLI."""
+    try:
+        with socket.create_connection(("127.0.0.1", METRICS_PORT), timeout=0.3):
+            return True
+    except OSError:
+        return False
+
+
+def metrics_control(up):
+    """Menu items for the telemetry stack (telemetry/metrics.sh); empty when that script is not in this checkout."""
+    if not os.path.exists(METRICS_SH):
+        return []
+    cmd = "bash=%s terminal=false refresh=true" % SELF
+    if up:
+        return ["Open Metrics | href=" + METRICS_URL, "Stop metrics | %s param1=--metrics-stop" % cmd]
+    return ["Start metrics | %s param1=--metrics-start" % cmd]
+
+
+def metrics(verb):
+    r = subprocess.run([METRICS_SH, verb], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True, timeout=120)
+    if r.returncode:
+        notify("Megavibe metrics: %s failed" % verb, (r.stdout.strip().splitlines() or ["see telemetry/metrics.sh"])[-1][:200])
+
+
 def action(name):
-    """Run by SwiftBar when a menu item is clicked (`--start` / `--stop`)."""
-    if name == "--start" and tmux("has-session", "-t", SESSION) != 0:
+    """Run by SwiftBar when a menu item is clicked (`--start` / `--stop` / `--metrics-start` / `--metrics-stop`)."""
+    if name in ("--metrics-start", "--metrics-stop"):
+        try:
+            metrics(name[len("--metrics-"):])
+        except (OSError, subprocess.SubprocessError):
+            notify("Megavibe metrics", "could not run telemetry/metrics.sh")
+    elif name == "--start" and tmux("has-session", "-t", SESSION) != 0:
         a = start_args()
         if a:
             tmux(*a)
@@ -163,7 +197,7 @@ def main(as_waybar=False):
         if as_waybar:
             print(json.dumps({"text": "◌", "tooltip": "Observer offline", "class": "offline"}))
         else:
-            print("\n".join(["◌ | color=gray", "---", "Observer offline | color=gray"] + control(False)))
+            print("\n".join(["◌ | color=gray", "---", "Observer offline | color=gray"] + control(False) + ["---"] + metrics_control(metrics_up())))
         return
     lines, notes, keys = plan(snapshot, load_state())
     for title, text in notes:
@@ -172,7 +206,7 @@ def main(as_waybar=False):
         except (OSError, subprocess.SubprocessError):
             pass
     save_state(keys)
-    print(waybar(lines) if as_waybar else "\n".join(lines + control(True)))
+    print(waybar(lines) if as_waybar else "\n".join(lines + control(True) + ["---"] + metrics_control(metrics_up())))
 
 
 if __name__ == "__main__":

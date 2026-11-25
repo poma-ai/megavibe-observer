@@ -64,6 +64,8 @@ Add a custom module. Notifications use `notify-send`. The tooltip lists the sess
 
 When the observer is down, the SwiftBar and Argos menus show "Start observer", which runs it in a tmux session named `megavibe-observer` (needs `tmux`; local `OBSERVER_URL` only). While that session exists they show "Stop observer". Watch it with `tmux attach -t megavibe-observer`.
 
+The same menus also start and stop the metrics stack (Grafana, `telemetry/metrics.sh`; needs Docker) and open it, and the web UI header has a Metrics link. See [TELEMETRY.md](TELEMETRY.md).
+
 ## Good to know
 
 - Sub-sessions are linked through megavibe's launch records (`~/.megavibe/launches/`, written by the `megavibe` wrapper) and, as a fallback, by process ancestry. Sessions started before that change have no record.

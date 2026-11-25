@@ -21,3 +21,5 @@ events.jsonl
 .claude
 .agent
 megavibe-deliverables
+
+telemetry/data/

@@ -47,6 +47,26 @@ class Menubar(unittest.TestCase):
         self.assertIsNone(mb.start_args("http://example.com:4747"))   # never launch for a remote address
         self.assertIsNone(mb.start_args("http://127.0.0.1"))
 
+    def test_metrics_items_follow_grafana_state(self):
+        up = "\n".join(mb.metrics_control(True))
+        self.assertIn("Open Metrics | href=http://127.0.0.1:%d/d/megavibe-agents" % mb.METRICS_PORT, up)
+        self.assertIn("param1=--metrics-stop", up)
+        down = mb.metrics_control(False)
+        self.assertEqual(len(down), 1)
+        self.assertIn("param1=--metrics-start", down[0])
+        self.assertNotIn("href=", down[0])
+
+    def test_metrics_actions_run_the_script_with_the_verb(self):
+        calls = []
+        orig = mb.metrics
+        mb.metrics = calls.append
+        try:
+            mb.action("--metrics-start")
+            mb.action("--metrics-stop")
+        finally:
+            mb.metrics = orig
+        self.assertEqual(calls, ["start", "stop"])
+
     def test_waybar_json(self):
         import json
         s = snap([{"sessionId": "a", "name": "a<b>", "status": "waiting", "attention": {"why": "permission prompt"}}])
