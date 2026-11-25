@@ -108,6 +108,10 @@
   const stamp = (ms) => new Date(ms).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
   const mb = (b) => (b >= 1e6 ? (b / 1e6).toFixed(1) + ' MB' : Math.max(1, Math.round(b / 1e3)) + ' KB');
 
+  let polling = $state(false);
+  async function pollNow() { polling = true; await poll(); polling = false; }
+  const ago = (ms) => { const m = Math.max(0, Math.round((now - ms) / 60000)); return m < 1 ? 'just now' : m < 60 ? m + ' min ago' : Math.round(m / 60) + ' h ago'; };
+
   async function poll() {
     try {
       const r = await fetch('/api/snapshot');
@@ -153,7 +157,7 @@
           <span class="dot {h.ok ? h.disk.level : 'critical'}"></span>
           <b>{h.name}</b>
           {#if h.ok}
-            <span class="mut">{h.sessions.length} sessions · {h.disk.freeGB} GB free{h.plan?.fiveHour ? ` · 5h ${h.plan.fiveHour.pct}%` : ''}{h.plan?.sevenDay ? ` · 7d ${h.plan.sevenDay.pct}%` : ''}{(h.jobs ?? []).length ? ` · ${h.jobs.length} codex job${h.jobs.length > 1 ? 's' : ''}` : ''}</span>
+            <span class="mut">{h.sessions.length} sessions · {h.disk.freeGB} GB free{(h.jobs ?? []).length ? ` · ${h.jobs.length} codex job${h.jobs.length > 1 ? 's' : ''}` : ''}</span>
           {:else}
             <span class="crit">unreachable: {h.error}</span>
           {/if}
@@ -201,6 +205,29 @@
     <div class="stat"><span class="n">{totals.agents}</span><span class="l">agents running</span></div>
     <div class="stat" class:alert={totals.attention}><span class="n">{totals.attention}</span><span class="l">need attention</span></div>
   </section>
+
+  {#each hosts.filter((h) => h.ok && h.plan) as h (h.name)}
+    <section class="usage">
+      <div class="uhead">
+        <h3>Plan usage <span class="mut">(account-wide{hosts.length > 1 ? ', ' + h.name : ''})</span></h3>
+        <span class="mut">as of {ago(h.plan.at)}</span>
+        <button class="poll" onclick={pollNow} disabled={polling}>{polling ? 'Polling…' : 'Poll now'}</button>
+      </div>
+      <div class="ubars">
+        {#each [['5-hour window', h.plan.fiveHour], ['7-day window', h.plan.sevenDay]] as [label, w]}
+          {#if w}
+            <div class="ubar">
+              <div class="brow"><span>{label}</span><b>{w.pct}%</b></div>
+              <div class="track" role="progressbar" aria-label={label} aria-valuemin="0" aria-valuemax="100" aria-valuenow={w.pct}>
+                <div class="fill" class:warn={w.pct >= 75} class:crit={w.pct >= 90} style="width:{Math.min(100, Math.max(0, w.pct))}%"></div>
+              </div>
+              <span class="mut small">resets {resets(w.resetsAt)}</span>
+            </div>
+          {/if}
+        {/each}
+      </div>
+    </section>
+  {/each}
 
   <section class="grid">
     {#each sorted as s (s.host + s.sessionId)}
@@ -290,7 +317,6 @@
 
 {#if selected}
   {@const row = sessions.find((x) => x.host === selected.host && x.sessionId === selected.sessionId)}
-  {@const plan = hosts.find((h) => h.name === selected.host)?.plan}
   <div class="scrim above" onclick={closeDetail} role="presentation"></div>
   <aside class="panel above" role="dialog" aria-modal="true" aria-label="Session details">
     <header class="phead">
@@ -389,15 +415,6 @@
         </section>
       {/if}
 
-      {#if plan}
-        <section>
-          <h3>Plan usage <span class="mut">(account-wide, {selected.host})</span></h3>
-          <dl class="kv">
-            {#if plan.fiveHour}<div><dt>5-hour window</dt><dd>{plan.fiveHour.pct}% <span class="mut">· resets {resets(plan.fiveHour.resetsAt)}</span></dd></div>{/if}
-            {#if plan.sevenDay}<div><dt>7-day window</dt><dd>{plan.sevenDay.pct}% <span class="mut">· resets {resets(plan.sevenDay.resetsAt)}</span></dd></div>{/if}
-          </dl>
-        </section>
-      {/if}
       {#if d.truncated}<p class="note">Some logs were too large to read and are left out of these totals.</p>{/if}
     {:else}
       <p class="mut">No transcript found for this session{detail?.truncated ? ' (too large to read)' : ''}.</p>
@@ -468,6 +485,19 @@
   .kv { display:grid; grid-template-columns:1fr 1fr; gap:12px 16px; margin:0; }
   .kv dd { font-size:15px; }
   .kv .dim dd { color:var(--mut); }
+  .usage { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px 16px; margin:0 0 20px; }
+  .uhead { display:flex; align-items:baseline; gap:12px; margin-bottom:10px; }
+  .uhead h3 { margin:0; font-size:14px; }
+  .uhead .poll { margin-left:auto; }
+  .ubars { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:16px 24px; }
+  .brow { display:flex; justify-content:space-between; font-size:13px; margin-bottom:6px; }
+  .track { height:8px; background:var(--card2); border-radius:999px; overflow:hidden; }
+  .fill { height:100%; background:var(--busy); border-radius:999px; }
+  .fill.warn { background:var(--warn); }
+  .fill.crit { background:var(--crit); }
+  .small { font-size:12px; display:block; margin-top:4px; }
+  .poll { background:none; border:1px solid var(--line); color:var(--mut); border-radius:999px; padding:2px 10px; cursor:pointer; font:inherit; font-size:12px; }
+  .poll:disabled { opacity:.6; cursor:default; }
   .note { color:var(--mut); font-size:12px; margin:10px 0 0; }
   .plain { list-style:none; margin:10px 0 0; padding:0; display:grid; gap:6px; }
   .plain li { display:flex; justify-content:space-between; gap:12px; font-size:13px; }

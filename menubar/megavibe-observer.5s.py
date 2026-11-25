@@ -18,6 +18,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import urllib.request
 from urllib.parse import urlparse
 
@@ -42,7 +43,12 @@ def blocked_reason(s, host):
     return None
 
 
-def plan(snapshot, notified):
+def age(ms, now):
+    m = max(0, int((now - ms / 1000) // 60))
+    return "just now" if m < 1 else "%d min ago" % m if m < 60 else "%d h ago" % (m // 60)
+
+
+def plan(snapshot, notified, now=None):
     """(menu lines, notifications [(title, text)], keys still in attention). Pure, so it can be tested."""
     rows = []
     for h in snapshot.get("hosts", []):
@@ -65,13 +71,18 @@ def plan(snapshot, notified):
         lines.append("%s %s  (%s) · %s | href=%s%s" % (mark, clean(s.get("name") or "session"), clean(h.get("name")), clean(state), URL, color))
     if not order:
         lines.append("No live sessions | color=gray")
+    now = time.time() if now is None else now
     lines += ["---"]
     for h in snapshot.get("hosts", []):
         if h.get("ok"):
             lines.append("%s · %s GB free | color=gray" % (clean(h.get("name")), clean(h.get("disk", {}).get("freeGB", "?"), 8)))
+            p = h.get("plan") or {}
+            parts = ["%s %s%%" % (lbl, clean((p[k] or {}).get("pct"), 5)) for k, lbl in (("fiveHour", "5h"), ("sevenDay", "7d")) if p.get(k)]
+            if parts and isinstance(p.get("at"), (int, float)):
+                lines.append("   %s · as of %s | color=gray" % (" · ".join(parts), age(p["at"], now)))
         else:
             lines.append("%s unreachable | color=#f87171" % clean(h.get("name")))
-    lines += ["Open Observer | href=" + URL, "Refresh | refresh=true"]
+    lines += ["Open Observer | href=" + URL, "Poll usage | refresh=true", "Refresh | refresh=true"]
     return lines, notes, keys
 
 
@@ -120,7 +131,7 @@ def notify(title, text):
 def waybar(lines):
     """Waybar JSON for the menu `plan` built: title -> text, the session and host rows -> tooltip, state -> css class."""
     bare = lambda l: l.split(" | ")[0]
-    tip = [bare(l) for l in lines[2:] if l != "---" and not l.startswith(("Open Observer", "Refresh"))]
+    tip = [bare(l) for l in lines[2:] if l != "---" and not l.startswith(("Open Observer", "Poll usage", "Refresh"))]
     cls = "attention" if lines[0].startswith("⚠") else "busy" if "#60a5fa" in lines[0] else "idle"
     return json.dumps({"text": bare(lines[0]), "tooltip": html.escape("\n".join(tip)), "class": cls})
 
