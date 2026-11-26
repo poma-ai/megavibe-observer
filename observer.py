@@ -164,6 +164,29 @@ class Handler(BaseHTTPRequestHandler):
             self.send(200, f.read(), mimetypes.guess_type(target)[0] or "application/octet-stream")
 
 
+PROBE = os.path.join(os.path.expanduser("~"), ".megavibe", "scripts", "usage-probe.sh")
+PROBE_EVERY_S = int(os.environ.get("OBSERVER_PROBE_S", "300"))   # 0 switches the timer off
+
+
+def probe_usage(script=PROBE):
+    """One `usage-probe.sh run --every 5` call (refreshes the Codex usage reading; it skips itself when a reading
+    is fresh or codex is missing). Returns True when it ran, False when the script is absent or failed."""
+    if not os.path.isfile(script):
+        return False
+    try:
+        return subprocess.run(["bash", script, "run", "--every", "5"], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                              stderr=subprocess.DEVNULL, timeout=120).returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+def probe_loop(every=PROBE_EVERY_S, stop=None):
+    stop = stop or threading.Event()
+    while not stop.is_set():
+        probe_usage()
+        stop.wait(every)
+
+
 def make_server(port=PORT):
     return ThreadingHTTPServer(("127.0.0.1", port), Handler)
 
@@ -174,6 +197,8 @@ if __name__ == "__main__":
     except OSError as e:
         raise SystemExit("cannot listen on 127.0.0.1:%d: %s" % (PORT, e))
     srv.daemon_threads = True
+    if PROBE_EVERY_S > 0:
+        threading.Thread(target=probe_loop, daemon=True).start()
     print("observer on http://127.0.0.1:%d" % PORT, flush=True)
     try:
         srv.serve_forever()

@@ -73,6 +73,23 @@ def get(path):
     return r.status, r.getheader("content-type"), r.read()
 
 
+class Probe(unittest.TestCase):
+    def test_probe_usage(self):
+        self.assertFalse(observer.probe_usage(os.path.join(TMP, "missing.sh")))
+        ok, bad = os.path.join(TMP, "ok.sh"), os.path.join(TMP, "bad.sh")
+        for path, body in ((ok, "echo \"$@\" > %s/args\nexit 0\n" % TMP), (bad, "exit 3\n")):
+            with open(path, "w") as f:
+                f.write(body)
+        self.assertTrue(observer.probe_usage(ok))
+        self.assertEqual(open(os.path.join(TMP, "args")).read().strip(), "run --every 5")
+        self.assertFalse(observer.probe_usage(bad))
+
+    def test_probe_loop_stops(self):
+        stop = threading.Event()
+        stop.set()
+        observer.probe_loop(1, stop)
+
+
 class Observer(unittest.TestCase):
     def test_snapshot_lists_local_sessions_and_reports_a_failing_host(self):
         code, _, body = get("/api/snapshot")

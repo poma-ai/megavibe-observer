@@ -18,7 +18,7 @@ cd ui && npm install && npm run build && cd ..
 python3 observer.py
 ```
 
-Open http://127.0.0.1:4747. The server listens on localhost only; `PORT=5000 python3 observer.py` changes the port. Stop it with Ctrl-C.
+Open http://127.0.0.1:4747. The server listens on localhost only; `PORT=5000 python3 observer.py` changes the port. Stop it with Ctrl-C. While it runs, a background thread calls `~/.megavibe/scripts/usage-probe.sh run --every 5` every 5 minutes to keep the Codex usage reading fresh (the script skips itself when a reading is under 15 minutes old or codex is missing; `OBSERVER_PROBE_S=0` turns the timer off, another number changes the interval).
 
 After changing `observer.py` or `collector/snapshot.py`, restart it. A UI change only needs `npm run build` and a page reload. For UI development with hot reload, run the server and `cd ui && npm run dev` (it proxies `/api`).
 
