@@ -280,10 +280,14 @@ def plan_usage():
     return None
 
 
+SLASH = re.compile(r"<command-name>/?([0-9A-Za-z_.:-]{1,64})</command-name>")
+
+
 def aggregate(path):
     """Totals for one transcript: assistant messages (deduplicated by message.id: one reply is written as several
     lines with the same usage), tokens, models and tool calls. Counts and names only, never text."""
     msgs, tools_seen, skills_seen, first, last = {}, {}, {}, None, None
+    skills_slash, pending = [], None
     with open(path, "rb") as f:
         for raw in f:
             try:
@@ -296,6 +300,20 @@ def aggregate(path):
             if isinstance(ts, str) and ISO.match(ts):
                 first, last = first or ts, ts
             m = d.get("message")
+            if d.get("type") == "user" and isinstance(m, dict):
+                # A skill typed as /name is no Skill tool call: it is a user line carrying <command-name>, followed
+                # by a line that loads the skill body. Built-ins (/clear, /model) lack the second line.
+                c = m.get("content")
+                txt = c if isinstance(c, str) else " ".join(
+                    b.get("text", "") for b in c if isinstance(b, dict) and isinstance(b.get("text"), str)
+                ) if isinstance(c, list) else ""
+                hit = SLASH.search(txt)
+                if hit:
+                    pending = hit.group(1)
+                elif pending:
+                    if "Base directory for this skill" in txt:
+                        skills_slash.append(safe_name(pending))
+                    pending = None
             if d.get("type") != "assistant" or not isinstance(m, dict):
                 continue
             if m.get("id") and isinstance(m.get("usage"), dict):
@@ -319,6 +337,8 @@ def aggregate(path):
         tools[n] = tools.get(n, 0) + 1
     skills = {}
     for n in skills_seen.values():
+        skills[n] = skills.get(n, 0) + 1
+    for n in skills_slash:
         skills[n] = skills.get(n, 0) + 1
     return {"messages": len(msgs), "tokens": tokens, "models": models, "tools": tools, "skills": skills,
             "first": first, "last": last}
