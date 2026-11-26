@@ -283,7 +283,7 @@ def plan_usage():
 def aggregate(path):
     """Totals for one transcript: assistant messages (deduplicated by message.id: one reply is written as several
     lines with the same usage), tokens, models and tool calls. Counts and names only, never text."""
-    msgs, tools_seen, first, last = {}, {}, None, None
+    msgs, tools_seen, skills_seen, first, last = {}, {}, {}, None, None
     with open(path, "rb") as f:
         for raw in f:
             try:
@@ -305,6 +305,9 @@ def aggregate(path):
                 for b in content:
                     if isinstance(b, dict) and b.get("type") == "tool_use" and b.get("id"):
                         tools_seen[b["id"]] = safe_name(b.get("name"))
+                        inp = b.get("input")
+                        if b.get("name") == "Skill" and isinstance(inp, dict) and isinstance(inp.get("skill"), str):
+                            skills_seen[b["id"]] = safe_name(inp["skill"])
     tokens, models, tools = {k: 0 for k, _ in TOKEN_KEYS}, {}, {}
     for model, u in msgs.values():
         for k, src in TOKEN_KEYS:
@@ -314,7 +317,11 @@ def aggregate(path):
             models[safe_name(model)] = models.get(safe_name(model), 0) + 1
     for n in tools_seen.values():
         tools[n] = tools.get(n, 0) + 1
-    return {"messages": len(msgs), "tokens": tokens, "models": models, "tools": tools, "first": first, "last": last}
+    skills = {}
+    for n in skills_seen.values():
+        skills[n] = skills.get(n, 0) + 1
+    return {"messages": len(msgs), "tokens": tokens, "models": models, "tools": tools, "skills": skills,
+            "first": first, "last": last}
 
 
 def detail(sid):
@@ -329,6 +336,7 @@ def detail(sid):
     out["session"] = {"messages": main_agg["messages"], "tokens": main_agg["tokens"], "models": main_agg["models"],
                       "toolCalls": sum(main_agg["tools"].values()),
                       "tools": sorted(main_agg["tools"].items(), key=lambda kv: -kv[1])[:8],
+                      "skills": sorted(main_agg["skills"].items(), key=lambda kv: -kv[1])[:12],
                       "first": main_agg["first"], "last": main_agg["last"]}
     groups, total = {}, {"count": 0, "running": 0, "messages": 0, "tokens": {k: 0 for k, _ in TOKEN_KEYS}}
     for m in sorted(glob.glob(os.path.join(path[:-len(".jsonl")], "subagents", "agent-*.meta.json")))[:500]:

@@ -237,7 +237,7 @@
       <article class="card" class:attn={attnDeep(s)} role="button" tabindex="0" onclick={() => openDetail(s)}
         onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDetail(s); } }}>
         <div class="top">
-          <h2 title={s.name}>{s.name}{#if s.launchedBy}<span class="tag" title="started by the megavibe wrapper">megavibe</span>{/if}</h2>
+          <h2 title={s.name}><span class="nm">{s.name}</span>{#if s.launchedBy}<span class="tag" title="started by the megavibe wrapper">megavibe</span>{/if}</h2>
           {#if s.attention}
             <span class="badge warn" title={s.attention.why}>waiting</span>
           {:else if s.diskLevel === 'critical'}
@@ -249,7 +249,7 @@
         <p class="path" title={s.cwd}>{short(s.cwd)}</p>
         <dl>
           <div><dt>Host</dt><dd>{s.host}</dd></div>
-          <div><dt>Where</dt><dd>{s.where}</dd></div>
+          <div class="wide"><dt>Where</dt><dd>{s.where}</dd></div>
           <div><dt>Model</dt><dd>{s.model ?? '–'}</dd></div>
           <div><dt>Provider</dt><dd>{s.provider ?? '–'}</dd></div>
           <div><dt>Agents</dt><dd>{s.agents}</dd></div>
@@ -270,7 +270,9 @@
           <div class="subs">
             <span class="subh">Sub-sessions</span>
             {#each groupsOf(s) as g (g.first.sessionId)}
-              <div class="sub">
+              <div class="sub link" role="button" tabindex="0" title="Open stats for this sub-session"
+                onclick={(e) => { e.stopPropagation(); openDetail(g.first); }}
+                onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); openDetail(g.first); } }}>
                 <span class="badge {g.attn ? 'warn' : g.busy ? 'busy' : 'idle'}">{g.attn ? g.attn.attention.why : g.busy ? 'busy' : 'idle'}</span>
                 <span class="sn" title={g.first.cwd}>{g.label}{g.n > 1 ? ` ×${g.n}` : ''}</span>
                 <span class="mut">{g.first.model ?? ''}</span>
@@ -378,6 +380,17 @@
       {/if}
 
       <section>
+        <h3>Skills used</h3>
+        {#if d.session.skills?.length}
+          <ul class="plain">
+            {#each d.session.skills as [name, n]}<li><span>{name}</span><span class="mut">{n}×</span></li>{/each}
+          </ul>
+        {:else}
+          <p class="mut">No skills were used in this session.</p>
+        {/if}
+      </section>
+
+      <section>
         <h3>Agents</h3>
         {#if d.agents.count === 0}
           <p class="mut">No subagents were started in this session.</p>
@@ -459,13 +472,18 @@
   .card:hover { transform:translateY(-2px); border-color:#35405a; }
   .card.attn { border-color:var(--warn); box-shadow:0 0 0 1px var(--warn) inset, 0 8px 30px -12px rgba(251,191,36,.35); }
   .top { display:flex; justify-content:space-between; align-items:center; gap:10px; }
-  h2 { font-size:16px; margin:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  h2 { font-size:16px; margin:0; min-width:0; display:flex; flex-wrap:wrap; align-items:center; gap:4px 0; overflow-wrap:anywhere; }
+  h2 .tag { flex:none; white-space:nowrap; }
+  .top .badge { flex:none; }
   .path { margin:4px 0 12px; color:var(--mut); font:12px ui-monospace, SFMono-Regular, Menlo, monospace; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .badge { padding:2px 10px; border-radius:999px; font-size:12px; font-weight:600; white-space:nowrap; background:color-mix(in srgb, currentColor 16%, transparent); }
   .badge.idle { color:var(--ok); } .badge.busy { color:var(--busy); } .badge.warn { color:var(--warn); } .badge.crit { color:var(--crit); }
   .badge.busy::before { content:''; display:inline-block; width:6px; height:6px; margin-right:6px; border-radius:50%; background:currentColor; animation:pulse 1.2s infinite; }
   @keyframes pulse { 50% { opacity:.25; } }
-  dl { display:grid; grid-template-columns:1fr 1fr; gap:10px 16px; margin:0; }
+  dl { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px 16px; margin:0; }
+  dl .wide { grid-column:1 / -1; }
+  dl .wide dd { white-space:normal; overflow-wrap:anywhere; }
+  dl > div { min-width:0; }
   dt { color:var(--mut); font-size:11px; text-transform:uppercase; letter-spacing:.06em; }
   dd { margin:1px 0 0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-variant-numeric:tabular-nums; }
   .agents { list-style:none; margin:12px 0 0; padding:0; display:flex; flex-wrap:wrap; gap:6px; }
@@ -476,6 +494,8 @@
   .subs { margin-top:12px; padding-top:10px; border-top:1px dashed var(--line); display:grid; gap:6px; }
   .subh { color:var(--mut); font-size:11px; text-transform:uppercase; letter-spacing:.06em; }
   .sub { display:flex; align-items:center; gap:8px; font-size:13px; }
+  .sub.link { cursor:pointer; border-radius:8px; margin:0 -6px; padding:2px 6px; }
+  .sub.link:hover { background:#1f2a44; }
   .sub .sn { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .card { cursor:pointer; }
   .card:focus-visible { outline:2px solid var(--busy); outline-offset:2px; }
