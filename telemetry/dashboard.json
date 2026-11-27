@@ -2381,7 +2381,7 @@
   {
    "id": 36,
    "type": "row",
-   "title": "Codex (api_request, user_prompt, startup verified live; tool_result and tool_decision panels stay empty until a logged-in run)",
+   "title": "Codex (api_request, turn_ttft, sse_event, user_prompt, auth_recovery, startup verified live; tool_result and tool_decision never arrived from codex 0.172)",
    "collapsed": false,
    "gridPos": {
     "h": 1,
@@ -2395,7 +2395,7 @@
    "id": 37,
    "type": "timeseries",
    "title": "Codex tool latency p95 by tool",
-   "description": "If empty after a real run: Explore Loki labels for service_name starting with codex, then fix event_name and the duration field.",
+   "description": "No codex.tool_result or codex.tool_decision events arrived in 7 days of real codex 0.172 exec runs (checked 2026-11-27, logged in, api_request events flowing), so this codex version probably does not emit them under these names. Explore Loki labels for service_name starting with codex to look for the tool event, then fix event_name and the duration field.",
    "datasource": {
     "type": "loki",
     "uid": "loki"
@@ -2509,7 +2509,7 @@
    "id": 39,
    "type": "timeseries",
    "title": "Codex tool decisions",
-   "description": "",
+   "description": "No codex.tool_result or codex.tool_decision events arrived in 7 days of real codex 0.172 exec runs (checked 2026-11-27, logged in, api_request events flowing), so this codex version probably does not emit them under these names. Explore Loki labels for service_name starting with codex to look for the tool event, then fix event_name and the duration field.",
    "datasource": {
     "type": "loki",
     "uid": "loki"
@@ -2706,6 +2706,197 @@
    "fieldConfig": {
     "defaults": {
      "unit": "ms",
+     "custom": {
+      "lineWidth": 1,
+      "fillOpacity": 5,
+      "showPoints": "never",
+      "spanNulls": true,
+      "stacking": {
+       "mode": "none"
+      }
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "bottom",
+     "calcs": [
+      "mean",
+      "max"
+     ]
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   }
+  },
+  {
+   "id": 49,
+   "type": "timeseries",
+   "title": "Codex time to first token p95 by model",
+   "description": "codex.turn_ttft duration_ms: how long a turn waits before the first output token.",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     },
+     "expr": "quantile_over_time(0.95, {service_name=~\"codex.*\"} | event_name=\"codex.turn_ttft\" | host_name=~\"$host\" | unwrap duration_ms [$__auto]) by (model)",
+     "legendFormat": "{{model}}",
+     "queryType": "range"
+    }
+   ],
+   "gridPos": {
+    "h": 7,
+    "w": 8,
+    "x": 0,
+    "y": 115
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "ms",
+     "custom": {
+      "lineWidth": 1,
+      "fillOpacity": 5,
+      "showPoints": "never",
+      "spanNulls": true,
+      "stacking": {
+       "mode": "none"
+      }
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "bottom",
+     "calcs": [
+      "mean",
+      "max"
+     ]
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   }
+  },
+  {
+   "id": 50,
+   "type": "timeseries",
+   "title": "Codex tokens by kind",
+   "description": "Per completed response (codex.sse_event, response.completed). Input is uncached: input_token_count minus cached_token_count, because Codex counts cached tokens inside its input.",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     },
+     "expr": "sum(sum_over_time({service_name=~\"codex.*\"} | event_name=\"codex.sse_event\" | event_kind=\"response.completed\" | host_name=~\"$host\" | unwrap input_token_count [$__auto])) - sum(sum_over_time({service_name=~\"codex.*\"} | event_name=\"codex.sse_event\" | event_kind=\"response.completed\" | host_name=~\"$host\" | unwrap cached_token_count [$__auto]))",
+     "legendFormat": "input (uncached)",
+     "queryType": "range"
+    },
+    {
+     "refId": "B",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     },
+     "expr": "sum(sum_over_time({service_name=~\"codex.*\"} | event_name=\"codex.sse_event\" | event_kind=\"response.completed\" | host_name=~\"$host\" | unwrap cached_token_count [$__auto]))",
+     "legendFormat": "cached input",
+     "queryType": "range"
+    },
+    {
+     "refId": "C",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     },
+     "expr": "sum(sum_over_time({service_name=~\"codex.*\"} | event_name=\"codex.sse_event\" | event_kind=\"response.completed\" | host_name=~\"$host\" | unwrap output_token_count [$__auto]))",
+     "legendFormat": "output",
+     "queryType": "range"
+    }
+   ],
+   "gridPos": {
+    "h": 7,
+    "w": 8,
+    "x": 8,
+    "y": 115
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "custom": {
+      "lineWidth": 1,
+      "fillOpacity": 30,
+      "showPoints": "never",
+      "spanNulls": true,
+      "stacking": {
+       "mode": "normal"
+      }
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "bottom",
+     "calcs": [
+      "mean",
+      "max"
+     ]
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   }
+  },
+  {
+   "id": 51,
+   "type": "timeseries",
+   "title": "Codex auth recovery by outcome",
+   "description": "codex.auth_recovery events by outcome and reason. recovery_not_run / not_chatgpt_auth means no recovery was needed or possible for that auth mode, not a failure by itself.",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "loki",
+      "uid": "loki"
+     },
+     "expr": "sum by (auth_outcome, auth_recovery_reason) (count_over_time({service_name=~\"codex.*\"} | event_name=\"codex.auth_recovery\" | host_name=~\"$host\" [$__auto]))",
+     "legendFormat": "{{auth_outcome}} / {{auth_recovery_reason}}",
+     "queryType": "range"
+    }
+   ],
+   "gridPos": {
+    "h": 7,
+    "w": 8,
+    "x": 16,
+    "y": 115
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
      "custom": {
       "lineWidth": 1,
       "fillOpacity": 5,

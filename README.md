@@ -66,6 +66,10 @@ When the observer is down, the SwiftBar and Argos menus show "Start observer", w
 
 The same menus also start and stop the metrics stack (Grafana, `telemetry/metrics.sh`; needs Docker) and open it, and the web UI header has a Metrics link. See [TELEMETRY.md](TELEMETRY.md).
 
+## Telemetry (optional)
+
+Claude Code and Codex can export metrics and events to a local Grafana stack (`telemetry/metrics.sh`, needs Docker), with a ready-made dashboard. Setup, the settings for each tool and what has and has not been verified are in [TELEMETRY.md](TELEMETRY.md).
+
 ## Good to know
 
 - Sub-sessions are linked through megavibe's launch records (`~/.megavibe/launches/`, written by the `megavibe` wrapper) and, as a fallback, by process ancestry. Sessions started before that change have no record.

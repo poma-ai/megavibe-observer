@@ -50,7 +50,7 @@ Rows and what they are for:
 - Models: requests, cost and tokens per model, cache hit ratio, output tokens per second, effort mix.
 - Blocked: decisions by outcome and source, rejects by tool and source (why), permissions you were asked for, hand-accepted interruptions (candidates for an allow rule), permission mode mix.
 - Your input: prompts over time, average prompt length, tool calls per prompt (how long the agent runs unattended), tool failures, API errors by status, active time.
-- Codex: API latency, prompts, API errors, startup phases, plus tool latency and decisions.
+- Codex: API latency, time to first token, tokens by kind, prompts, API errors, auth recovery, startup phases, plus tool latency and decisions.
 
 Reading "why blocked": `tool_decision.source` is `config` when a rule matched (or no allow rule exists in non-interactive mode), `user_temporary` or `user_permanent` when you were asked, `hook` when a hook decided. Prompt text is never exported, so "why did I type this" is answered by proxy: hand-approved permissions, prompt length, and tool calls per prompt.
 
@@ -95,7 +95,9 @@ metrics_exporter = { otlp-http = { endpoint = "http://127.0.0.1:47318/v1/metrics
 
 Endpoints are full signal paths, unlike Claude's base endpoint. Codex 0.172.0 started without rejecting any of the three exporter keys (log events arrived; I did not check Tempo or Prometheus for Codex data). Observed events (service `codex_exec`, host from the resource): `codex.conversation_starts`, `codex.user_prompt`, `codex.api_request` (model, duration_ms, error_message), `codex.startup_phase`, `codex.websocket_connect`, `codex.auth_recovery`. No Codex metrics appeared in Prometheus.
 
-Not yet observed: `codex.tool_result` and `codex.tool_decision`. Codex was not logged in here, so every run stopped at an HTTP 401 before any tool ran. After `codex login`, run one real `codex exec` and check that those two panels fill; if the event or field names differ, fix them in the Codex row.
+Also observed, 2026-11-27 (7 days of runs): `codex.turn_ttft` (model, duration_ms), `codex.sse_event` (`event_kind="response.completed"` carries `input_token_count`, `cached_token_count`, `output_token_count`, `reasoning_token_count`; input includes the cached tokens), `codex.websocket_request`. These feed the time to first token, tokens by kind and auth recovery panels (`recovery_not_run` / `not_chatgpt_auth` is the common value and not a failure).
+
+Never observed: `codex.tool_result` and `codex.tool_decision`, in 7 days of logged-in `codex exec` runs with `api_request` events flowing. Codex 0.172.0 probably does not emit them under these names, so the two Codex tool panels stay empty. Find the real tool event in Loki (labels for `service_name` starting with `codex`) before changing them.
 
 ## Verification
 
