@@ -135,14 +135,56 @@ class Observer(unittest.TestCase):
         self.assertEqual(post(ok, {"host": "local", "id": "x;y"}), 400)
         self.assertEqual(post(ok, {"host": "nope", "id": SID}), 400)
 
-    def test_open_terminal_refuses_a_live_plain_terminal_session(self):
-        orig = observer.sys.platform
+    def _open(self, info=None, run=None, h=None):
+        """open_terminal as on macOS with session_info and subprocess.run replaced; returns (result, commands run)."""
+        saved = (observer.sys.platform, observer.session_info, observer.subprocess.run)
+        ran = []
         observer.sys.platform = "darwin"
+        observer._recent.clear()
+        if info is not None:
+            observer.session_info = lambda h, sid: info
+        observer.subprocess.run = lambda args, **kw: (ran.append(args), type("P", (), {"returncode": 0, "stderr": ""})())[1]
         try:
-            code, _ = observer.open_terminal({"name": "local"}, SID)
+            return observer.open_terminal(h or {"name": "local"}, SID), ran
         finally:
-            observer.sys.platform = orig
-        self.assertEqual(code, 409)
+            observer.sys.platform, observer.session_info, observer.subprocess.run = saved
+
+    def test_open_terminal_refuses_a_live_plain_terminal_session(self):
+        self.assertEqual(self._open((("/x"), "terminal", None))[0][0], 409)
+
+    def test_open_terminal_actions(self):
+        (code, _), ran = self._open(("/x y", None, None))
+        self.assertEqual(code, 200)
+        self.assertEqual(ran[0][-1], "cd '/x y' && claude --resume " + SID)
+        (code, _), ran = self._open(("/x", "tmux s:w", None))
+        self.assertEqual(ran[0][-1], "tmux attach -t =s")
+        (code, _), ran = self._open(("/x", None, None), h={"name": "r", "ssh": "u@r"})
+        self.assertEqual(ran[0][-1], "ssh -t u@r '\"$SHELL\" -lc '\"'\"'cd /x && claude --resume %s'\"'\"''" % SID)
+
+    def test_open_terminal_rejects_control_characters(self):
+        for cwd, where in (("/x\x15touch PWNED\n", None), ("/x", "tmux a\nb:w")):
+            (code, _), ran = self._open((cwd, where, None))
+            self.assertEqual((code, ran), (404, []))
+
+    def test_open_terminal_does_not_resume_when_the_host_snapshot_failed(self):
+        saved = observer.collect
+        observer.collect = lambda h, *a, **k: {"name": "r", "ok": False, "error": "timed out", "sessions": []}
+        try:
+            self.assertEqual(observer.session_info({"name": "r"}, SID)[2][0], 502)
+        finally:
+            observer.collect = saved
+
+    def test_open_terminal_dedupes_a_double_click(self):
+        saved = (observer.sys.platform, observer.session_info, observer.subprocess.run)
+        self._open(("/x", None, None))
+        observer.sys.platform = "darwin"
+        observer.session_info = lambda h, sid: ("/x", None, None)
+        observer.subprocess.run = lambda *a, **k: self.fail("second window opened")
+        try:
+            self.assertEqual(observer.open_terminal({"name": "local"}, SID)[0], 429)
+        finally:
+            observer.sys.platform, observer.session_info, observer.subprocess.run = saved
+            observer._recent.clear()
 
     def test_detail_counts_each_reply_once_and_caches(self):
         calls = []

@@ -7,9 +7,12 @@
                                   unless tmp=1; cached 30 s)
 
 The local host is read in-process through collector/snapshot.py. A host with an "ssh" entry in hosts.json gets
-the same file piped to `python3 -` over `ssh -o BatchMode=yes`, so nothing is installed there.   POST /api/open-terminal         {host, id}: opens a macOS Terminal window: attaches to the session's tmux session if
-                                  live in tmux, `claude --resume <id>` in its cwd if ended, refused if live in a
-                                  plain terminal (ssh -t for a remote host)
+the same file piped to `python3 -` over `ssh -o BatchMode=yes`, so nothing is installed there.
+
+  POST /api/open-terminal         {host, id}: opens a macOS Terminal window: attaches to the session's tmux session
+                                  if live in tmux, `claude --resume <id>` in its cwd if ended, refused if live in a
+                                  plain terminal (ssh -t for a remote host). The one action the server takes.
+
 Otherwise read-only: it never writes outside its own process and sends nothing anywhere but the listed hosts.
 """
 import json
@@ -130,16 +133,33 @@ def history(include_tmp):
 
 
 def session_info(h, sid):
-    """(cwd, where): the session's working directory and, when it is live, where it runs ("tmux s:w" or
-    "terminal"; None when ended), as its own host reports it. Never taken from the request."""
-    for s in collect(h).get("sessions") or []:
-        if s.get("sessionId") == sid and s.get("cwd"):
-            return s["cwd"], s.get("where") or "terminal"
+    """(cwd, where, error): the session's working directory and, when it is live, where it runs ("tmux s:w" or
+    "terminal"; None when ended), as its own host reports it. Never taken from the request. A host whose live
+    snapshot failed is an error, never "ended": that would resume a session that is still running."""
+    snap = collect(h)
+    if not snap.get("ok"):
+        return None, None, (502, "host unreachable: " + str(snap.get("error", ""))[:120])
+    for s in snap.get("sessions") or []:
+        if s.get("sessionId") == sid:
+            if not s.get("cwd"):
+                return None, None, (404, "session working directory not found")
+            return s["cwd"], s.get("where") or "terminal", None
     for key in ("", "tmp"):
-        for r in collect(h, timeout=40, history=key).get("history") or []:
+        hist = collect(h, timeout=40, history=key)
+        if not hist.get("ok"):
+            return None, None, (502, "host unreachable: " + str(hist.get("error", ""))[:120])
+        for r in hist.get("history") or []:
             if r.get("sessionId") == sid and r.get("cwd"):
-                return r["cwd"], None
-    return None, None
+                return r["cwd"], None, None
+    return None, None, (404, "session working directory not found")
+
+
+# Terminal's `do script` types the command into a tty, where control characters (^U, newline) act on the line
+# editor even inside shell quotes, so a cwd or tmux name carrying one must never reach it.
+CONTROL = re.compile(r"[\x00-\x1f\x7f]")
+_recent = {}
+_recent_lock = threading.Lock()
+DEDUPE_S = 10
 
 
 def open_terminal(h, sid):
@@ -148,19 +168,30 @@ def open_terminal(h, sid):
     fork the transcript). Over ssh for a remote host. Returns (http status, message). macOS Terminal.app only."""
     if sys.platform != "darwin":
         return 501, "open in terminal is only supported on macOS"
-    cwd, where = session_info(h, sid)
-    if not cwd or not os.path.isabs(cwd):
-        return 404, "session working directory not found"
+    with _recent_lock:   # a double click must not open two windows on one transcript
+        now = time.time()
+        for k in [k for k, t in _recent.items() if now - t >= DEDUPE_S]:
+            del _recent[k]
+        if (h["name"], sid) in _recent:
+            return 429, "already opening this session"
+        _recent[(h["name"], sid)] = now
+    cwd, where, err = session_info(h, sid)
+    if err:
+        return err
+    if not os.path.isabs(cwd) or CONTROL.search(cwd):
+        return 404, "session working directory not usable"
     if where is None:
         inner = "cd %s && claude --resume %s" % (shlex.quote(cwd), sid)
     elif where.startswith("tmux "):
         name = where[5:].split(":", 1)[0]
-        if not name:
+        if not name or CONTROL.search(name):
             return 404, "tmux session not found"
         inner = "tmux attach -t %s" % shlex.quote("=" + name)
     else:
         return 409, "session is running in a plain terminal and cannot be opened from here"
-    cmd = "ssh -t %s %s" % (shlex.quote(h["ssh"]), shlex.quote(inner)) if h.get("ssh") else inner
+    # ssh runs a non-login shell where tmux and claude are often off PATH: use the remote user's login shell
+    remote = '"$SHELL" -lc ' + shlex.quote(inner)
+    cmd = "ssh -t %s %s" % (shlex.quote(h["ssh"]), shlex.quote(remote)) if h.get("ssh") else inner
     script = ['on run argv', 'tell application "Terminal"', 'activate', 'do script (item 1 of argv)',
               'end tell', 'end run']
     args = ["osascript"] + [x for line in script for x in ("-e", line)] + [cmd]
@@ -199,7 +230,7 @@ class Handler(BaseHTTPRequestHandler):
         if urlparse(self.path).path != "/api/open-terminal":
             return self.send(404, b"not found", "text/plain")
         try:
-            body = json.loads(self.rfile.read(min(int(self.headers.get("content-length") or 0), 4096)) or b"{}")
+            body = json.loads(self.rfile.read(max(0, min(int(self.headers.get("content-length") or 0), 4096))) or b"{}")
         except ValueError:
             return self.send(400, b"bad json", "text/plain")
         ok = isinstance(body, dict)

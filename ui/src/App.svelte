@@ -26,13 +26,16 @@
     finally { if (selected?.sessionId === s.sessionId) detailLoading = false; }
   }
   let termMsg = $state('');
+  let termBusy = $state(false);
   async function openTerminal(s) {
-    termMsg = '';
+    if (termBusy) return;
+    termBusy = true; termMsg = '';
     try {
       const r = await fetch('/api/open-terminal', { method: 'POST', headers: { 'content-type': 'application/json', 'x-observer': '1' }, body: JSON.stringify({ host: s.host, id: s.sessionId }) });
       const j = await r.json().catch(() => ({}));
       termMsg = r.ok ? '' : (j.message ?? `failed (${r.status})`);
     } catch (e) { termMsg = String(e); }
+    finally { termBusy = false; }
   }
   const closeDetail = () => { selected = null; detail = null; detailErr = null; detailLoading = false; };
   const compact = (n) => new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 }).format(n ?? 0);
@@ -362,7 +365,7 @@
         <h2>{row?.name ?? 'Session ended'}</h2>
         <p class="path">{short(row?.cwd)}{row ? ` · ${selected.host}` : ''}</p>
         {#if row}<p class="path">{row.where}{row.launchedBy ? ' · megavibe' : ''}</p>{/if}
-        <button class="term" disabled={!!row && !tmuxLive} onclick={() => openTerminal(selected)}
+        <button class="term" disabled={termBusy || (!!row && !tmuxLive)} onclick={() => openTerminal(selected)}
           title={!row ? 'Resume this ended session in a new Terminal window' : tmuxLive ? 'Attach to this tmux session in a new Terminal window' : 'Running in a plain terminal: cannot be opened from here'}>{!row ? 'Resume in terminal' : tmuxLive ? 'Attach in terminal' : 'Open in terminal'}</button>
       </div>
       <button class="close" onclick={closeDetail} aria-label="Close details">✕</button>

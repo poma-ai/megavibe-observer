@@ -2,7 +2,7 @@
 
 A read-only dashboard of the Claude Code sessions on your machines. One card per live session: state (busy, idle, waiting for input or a permission), model, running agents, sub-sessions, Codex jobs, background shells, host and free disk. Click a card for its totals: tokens, tools, every agent started, and plan usage.
 
-It only reads local files (`~/.claude/sessions`, `~/.claude/projects`, and megavibe's `~/.megavibe` when present). It sends and changes nothing, and it never reads transcript text, only counts and names.
+It only reads local files (`~/.claude/sessions`, `~/.claude/projects`, and megavibe's `~/.megavibe` when present). It sends nothing anywhere and changes nothing, except that the session panel's button opens a macOS Terminal window (tmux attach for a live tmux session, `claude --resume` for an ended one). It never reads transcript text, only counts and names.
 
 ## Requirements
 

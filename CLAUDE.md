@@ -22,6 +22,6 @@ Read-only dashboard of Claude Code / megavibe sessions across machines. Python s
 ## Constraints
 
 - The collector must stay stdlib-only and Python 3.6 compatible (it runs on remote machines with whatever `python3` exists). `observer.py` needs 3.7+.
-- Never emit transcript text, only ids, model and tool names, and counts. The whole tool is read-only.
+- Never emit transcript text, only ids, model and tool names, and counts. The tool is read-only except `POST /api/open-terminal`, which opens a Terminal window; its input is validated (session id regex, Host/Origin/`x-observer` checks, control characters rejected in anything typed into the terminal).
 - Session ids are validated against `^[0-9A-Za-z-]{1,64}$` before reaching the filesystem or ssh. `ssh` host values starting with `-` are rejected (option injection).
 - The server binds localhost only. Keep it that way.
