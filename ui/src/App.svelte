@@ -363,7 +363,7 @@
       {@const d = detail}
       {@const maxTool = Math.max(1, ...d.session.tools.map((t) => t[1]))}
       <section>
-        <h3>Overview</h3>
+        <h3>Overview <span class="tag claude">Claude</span></h3>
         <dl class="kv">
           <div><dt>Running</dt><dd>{row ? age(row.startedAt) : '–'}</dd></div>
           <div><dt>Assistant messages</dt><dd>{d.session.messages}</dd></div>
@@ -375,7 +375,7 @@
       </section>
 
       <section>
-        <h3>Tokens</h3>
+        <h3>Tokens <span class="tag claude">Claude</span></h3>
         <dl class="kv">
           {#each tokenRows as [k, label]}
             <div class:dim={k === 'cacheRead'}><dt>{label}</dt><dd title={d.session.tokens[k].toLocaleString()}>{compact(d.session.tokens[k])}</dd></div>
@@ -385,7 +385,7 @@
       </section>
 
       <section>
-        <h3>Models</h3>
+        <h3>Models <span class="tag claude">Claude</span></h3>
         <ul class="plain">
           {#each Object.entries(d.session.models) as [m, n]}<li><span>{m}</span><span class="mut">{n} messages</span></li>{/each}
         </ul>
@@ -393,7 +393,7 @@
 
       {#if d.session.tools.length}
         <section>
-          <h3>Top tools</h3>
+          <h3>Top tools <span class="tag claude">Claude</span></h3>
           <ul class="bars">
             {#each d.session.tools as [name, n]}
               <li><span class="bn">{name}</span><span class="bar"><i style:width="{(n / maxTool) * 100}%"></i></span><span class="bv">{n}</span></li>
@@ -403,7 +403,7 @@
       {/if}
 
       <section>
-        <h3>Skills used</h3>
+        <h3>Skills used <span class="tag claude">Claude</span></h3>
         {#if d.session.skills?.length}
           <ul class="plain">
             {#each d.session.skills as [name, n]}<li><span>{name}</span><span class="mut">{n}×</span></li>{/each}
@@ -414,7 +414,7 @@
       </section>
 
       <section>
-        <h3>Agents</h3>
+        <h3>Agents <span class="tag claude">Claude</span></h3>
         {#if d.agents.count === 0}
           <p class="mut">No subagents were started in this session.</p>
         {:else}
@@ -433,6 +433,23 @@
             {/each}
           </ul>
         {/if}
+      </section>
+
+      <section>
+        <h3>Usage <span class="mut">(this directory, during the session)</span> <span class="tag codex">Codex</span></h3>
+        {#if d.codex}
+          <dl class="kv">
+            <div><dt>Runs</dt><dd>{d.codex.runs}</dd></div>
+            <div><dt>Input tokens <span class="mut small">(uncached)</span></dt><dd title={d.codex.tokens.input.toLocaleString()}>{compact(d.codex.tokens.input)}</dd></div>
+            <div><dt>Output tokens</dt><dd title={d.codex.tokens.output.toLocaleString()}>{compact(d.codex.tokens.output)}</dd></div>
+          </dl>
+          <ul class="plain">
+            {#each Object.entries(d.codex.models) as [m, n]}<li><span>{m}</span><span class="mut">{n} turns</span></li>{/each}
+          </ul>
+        {:else}
+          <p class="mut">No Codex runs.</p>
+        {/if}
+        <p class="note">Matched by directory and time, so runs by other sessions or by hand in the same directory are included. Reviews run in a scratch directory cannot be attributed and are not counted.</p>
       </section>
 
       {#if row}
@@ -538,12 +555,13 @@
   .close { background:none; border:1px solid var(--line); color:var(--mut); border-radius:8px; width:32px; height:32px; cursor:pointer; font-size:14px; }
   .close:hover { color:var(--fg); border-color:#35405a; }
   .panel section { margin-top:20px; padding-top:16px; border-top:1px solid var(--line); }
-  .panel h3 { font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--mut); margin:0 0 10px; font-weight:600; }
+  .panel h3 { display:flex; align-items:center; gap:6px; font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--mut); margin:0 0 10px; font-weight:600; }
   .kv { display:grid; grid-template-columns:1fr 1fr; gap:12px 16px; margin:0; }
   .kv dd { font-size:15px; }
   .kv .dim dd { color:var(--mut); }
   .pcols { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:8px 28px; }
   .prov { display:flex; gap:8px; align-items:center; margin:10px 0 4px; }
+  .panel h3 .tag { margin-left:auto; }
   .tag.claude { color:#f08a24; border-color:#9a4d0c; }
   .tag.codex { color:#86efac; border-color:#2f6b4a; }
   .usage { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px 16px; margin:0 0 20px; }

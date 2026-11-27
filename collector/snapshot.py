@@ -4,7 +4,7 @@
 Stdlib only and Python 3.6 compatible so it can be piped to a remote `python3 -` over ssh.
 Never emits transcript text: only ids, model names, tool names and counts.
 """
-import calendar, glob, json, os, re, shutil, socket, subprocess, sys, time
+import calendar, datetime, glob, json, os, re, shutil, socket, subprocess, sys, time
 
 HOME = os.path.expanduser("~")
 TAIL = 400_000            # bytes of transcript tail read per session
@@ -392,6 +392,77 @@ def aggregate(path):
             "first": first, "last": last}
 
 
+def codex_for_session(cwd, first, last):
+    """Codex rollouts started in this session's cwd between its first and last activity: runs, models (turn count
+    each) and tokens. Linked by cwd and time only: runs in a scratch cwd (`codex-review.sh --as-reviewer`) cannot be
+    attributed and are left out. Names and counts only."""
+    root = os.path.join(os.environ.get("CODEX_HOME") or os.path.join(HOME, ".codex"), "sessions")
+    if not (cwd and first and last and os.path.isdir(root)):
+        return None
+    try:
+        t0 = datetime.datetime.strptime(first[:10], "%Y-%m-%d")
+        t1 = datetime.datetime.strptime(last[:10], "%Y-%m-%d")
+    except ValueError:
+        return None
+    files, day = [], t1 + datetime.timedelta(days=1)   # newest day first: a cap drops the oldest runs
+    while day >= t0 - datetime.timedelta(days=1) and len(files) < 5000:
+        files += sorted(glob.glob(os.path.join(root, day.strftime("%Y/%m/%d"), "rollout-*.jsonl")))
+        day -= datetime.timedelta(days=1)
+    out = {"runs": 0, "models": {}, "tokens": {"input": 0, "output": 0, "cacheRead": 0}}
+    for f in files[:5000]:
+        try:
+            if os.path.getsize(f) > DETAIL_MAX_BYTES:
+                continue
+            meta, usage, models = None, None, {}
+            with open(f, "rb") as fh:
+                for raw in fh:
+                    if b'"session_meta"' in raw[:200] and meta is None:
+                        meta = json.loads(raw).get("payload") or {}
+                        ts = meta.get("timestamp")
+                        if meta.get("cwd") != cwd or not (isinstance(ts, str) and first <= ts <= last):
+                            meta = False
+                            break
+                    elif b'"turn_context"' in raw[:200]:
+                        m = (json.loads(raw).get("payload") or {}).get("model")
+                        if isinstance(m, str):
+                            models[safe_name(m)] = models.get(safe_name(m), 0) + 1
+                    elif b'"token_count"' in raw[:300]:
+                        u = ((json.loads(raw).get("payload") or {}).get("info") or {}).get("total_token_usage")
+                        usage = u if isinstance(u, dict) else usage
+            if not meta:
+                continue
+        except (OSError, ValueError, AttributeError):
+            continue
+        out["runs"] += 1
+        for m, n in models.items():
+            out["models"][m] = out["models"].get(m, 0) + n
+        if usage:
+            def num(k):
+                v = usage.get(k)
+                return v if type(v) is int and v >= 0 else 0
+            cached = num("cached_input_tokens")
+            out["tokens"]["input"] += max(0, num("input_tokens") - cached)   # Codex input includes cached tokens
+            out["tokens"]["output"] += num("output_tokens")
+            out["tokens"]["cacheRead"] += cached
+    return out if out["runs"] else None
+
+
+def session_cwd(path):
+    try:
+        with open(path, "rb") as fh:
+            head = fh.read(HISTORY_HEAD)
+    except OSError:
+        return None
+    for raw in head.split(b"\n")[:-1]:
+        try:
+            d = json.loads(raw)
+        except ValueError:
+            continue
+        if isinstance(d, dict) and isinstance(d.get("cwd"), str):
+            return d["cwd"]
+    return None
+
+
 def detail(sid):
     """Everything the click-through panel shows for one session, computed on demand (a transcript can be large)."""
     out = {"host": socket.gethostname().split(".")[0], "sessionId": sid, "found": False, "truncated": False}
@@ -406,6 +477,10 @@ def detail(sid):
                       "tools": sorted(main_agg["tools"].items(), key=lambda kv: -kv[1])[:8],
                       "skills": sorted(main_agg["skills"].items(), key=lambda kv: -kv[1])[:12],
                       "first": main_agg["first"], "last": main_agg["last"]}
+    try:
+        out["codex"] = codex_for_session(session_cwd(path), main_agg["first"], main_agg["last"])
+    except Exception:   # a new Codex log format must not take the Claude sections down
+        out["codex"] = None
     groups, total = {}, {"count": 0, "running": 0, "messages": 0, "tokens": {k: 0 for k, _ in TOKEN_KEYS}}
     for m in sorted(glob.glob(os.path.join(path[:-len(".jsonl")], "subagents", "agent-*.meta.json")))[:500]:
         try:
