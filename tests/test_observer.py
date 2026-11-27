@@ -123,6 +123,27 @@ class Observer(unittest.TestCase):
         self.assertEqual(get("/api/detail?host=nope&id=abc")[0], 400)
         self.assertEqual(get("/api/detail?host=local")[0], 400)
 
+    def test_open_terminal_rejects_foreign_and_malformed_requests(self):
+        def post(headers, body):
+            c = http.client.HTTPConnection("127.0.0.1", port, timeout=20)
+            c.request("POST", "/api/open-terminal", json.dumps(body), headers)
+            return c.getresponse().status
+        ok = {"x-observer": "1"}
+        self.assertEqual(post({}, {"host": "local", "id": SID}), 403)
+        self.assertEqual(post(dict(ok, origin="http://evil.example"), {"host": "local", "id": SID}), 403)
+        self.assertEqual(post(dict(ok, host="evil.example"), {"host": "local", "id": SID}), 403)
+        self.assertEqual(post(ok, {"host": "local", "id": "x;y"}), 400)
+        self.assertEqual(post(ok, {"host": "nope", "id": SID}), 400)
+
+    def test_open_terminal_refuses_a_live_plain_terminal_session(self):
+        orig = observer.sys.platform
+        observer.sys.platform = "darwin"
+        try:
+            code, _ = observer.open_terminal({"name": "local"}, SID)
+        finally:
+            observer.sys.platform = orig
+        self.assertEqual(code, 409)
+
     def test_detail_counts_each_reply_once_and_caches(self):
         calls = []
         real = observer.collect

@@ -7,13 +7,16 @@
                                   unless tmp=1; cached 30 s)
 
 The local host is read in-process through collector/snapshot.py. A host with an "ssh" entry in hosts.json gets
-the same file piped to `python3 -` over `ssh -o BatchMode=yes`, so nothing is installed there. Read-only: it
-never writes outside its own process and sends nothing anywhere but the listed hosts.
+the same file piped to `python3 -` over `ssh -o BatchMode=yes`, so nothing is installed there.   POST /api/open-terminal         {host, id}: opens a macOS Terminal window: attaches to the session's tmux session if
+                                  live in tmux, `claude --resume <id>` in its cwd if ended, refused if live in a
+                                  plain terminal (ssh -t for a remote host)
+Otherwise read-only: it never writes outside its own process and sends nothing anywhere but the listed hosts.
 """
 import json
 import mimetypes
 import os
 import re
+import shlex
 import subprocess
 import sys
 import threading
@@ -126,6 +129,48 @@ def history(include_tmp):
     return result
 
 
+def session_info(h, sid):
+    """(cwd, where): the session's working directory and, when it is live, where it runs ("tmux s:w" or
+    "terminal"; None when ended), as its own host reports it. Never taken from the request."""
+    for s in collect(h).get("sessions") or []:
+        if s.get("sessionId") == sid and s.get("cwd"):
+            return s["cwd"], s.get("where") or "terminal"
+    for key in ("", "tmp"):
+        for r in collect(h, timeout=40, history=key).get("history") or []:
+            if r.get("sessionId") == sid and r.get("cwd"):
+                return r["cwd"], None
+    return None, None
+
+
+def open_terminal(h, sid):
+    """Open a Terminal window on the session: attach to its tmux session when it is live in tmux, resume it
+    (`claude --resume`) when it has ended, refuse when it is live in a plain terminal (a second instance would
+    fork the transcript). Over ssh for a remote host. Returns (http status, message). macOS Terminal.app only."""
+    if sys.platform != "darwin":
+        return 501, "open in terminal is only supported on macOS"
+    cwd, where = session_info(h, sid)
+    if not cwd or not os.path.isabs(cwd):
+        return 404, "session working directory not found"
+    if where is None:
+        inner = "cd %s && claude --resume %s" % (shlex.quote(cwd), sid)
+    elif where.startswith("tmux "):
+        name = where[5:].split(":", 1)[0]
+        if not name:
+            return 404, "tmux session not found"
+        inner = "tmux attach -t %s" % shlex.quote("=" + name)
+    else:
+        return 409, "session is running in a plain terminal and cannot be opened from here"
+    cmd = "ssh -t %s %s" % (shlex.quote(h["ssh"]), shlex.quote(inner)) if h.get("ssh") else inner
+    script = ['on run argv', 'tell application "Terminal"', 'activate', 'do script (item 1 of argv)',
+              'end tell', 'end run']
+    args = ["osascript"] + [x for line in script for x in ("-e", line)] + [cmd]
+    try:
+        p = subprocess.run(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, timeout=15)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return 500, type(e).__name__
+    return (200, "opened") if p.returncode == 0 else (500, (p.stderr.strip().splitlines() or ["osascript failed"])[-1][:200])
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *args):
         pass
@@ -141,6 +186,29 @@ class Handler(BaseHTTPRequestHandler):
 
     def json(self, obj):
         self.send(200, json.dumps(obj).encode(), "application/json", no_store=True)
+
+    def do_POST(self):
+        """The only action the server takes. A page on another origin must not be able to trigger it: the Host
+        must be this server, any Origin must match it, and a custom header forces a CORS preflight."""
+        host = self.headers.get("host", "")
+        origin = self.headers.get("origin")
+        bound = self.server.server_address[1]
+        if host not in ("127.0.0.1:%d" % bound, "localhost:%d" % bound) or self.headers.get("x-observer") != "1" \
+                or (origin is not None and origin != "http://" + host):
+            return self.send(403, b"forbidden", "text/plain")
+        if urlparse(self.path).path != "/api/open-terminal":
+            return self.send(404, b"not found", "text/plain")
+        try:
+            body = json.loads(self.rfile.read(min(int(self.headers.get("content-length") or 0), 4096)) or b"{}")
+        except ValueError:
+            return self.send(400, b"bad json", "text/plain")
+        ok = isinstance(body, dict)
+        h = next((x for x in HOSTS if x["name"] == body.get("host")), None) if ok else None
+        sid = body.get("id") if ok else None
+        if not h or not isinstance(sid, str) or not SESSION_ID.match(sid):
+            return self.send(400, b"bad host or id", "text/plain")
+        code, msg = open_terminal(h, sid)
+        self.send(code, json.dumps({"ok": code == 200, "message": msg}).encode(), "application/json", no_store=True)
 
     def do_GET(self):
         url = urlparse(self.path)

@@ -25,6 +25,15 @@
     } catch (e) { detailErr = String(e); }
     finally { if (selected?.sessionId === s.sessionId) detailLoading = false; }
   }
+  let termMsg = $state('');
+  async function openTerminal(s) {
+    termMsg = '';
+    try {
+      const r = await fetch('/api/open-terminal', { method: 'POST', headers: { 'content-type': 'application/json', 'x-observer': '1' }, body: JSON.stringify({ host: s.host, id: s.sessionId }) });
+      const j = await r.json().catch(() => ({}));
+      termMsg = r.ok ? '' : (j.message ?? `failed (${r.status})`);
+    } catch (e) { termMsg = String(e); }
+  }
   const closeDetail = () => { selected = null; detail = null; detailErr = null; detailLoading = false; };
   const compact = (n) => new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 }).format(n ?? 0);
   const when = (iso) => (iso ? new Date(iso).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '–');
@@ -345,15 +354,20 @@
 
 {#if selected}
   {@const row = sessions.find((x) => x.host === selected.host && x.sessionId === selected.sessionId)}
+  {@const tmuxLive = row?.where?.startsWith('tmux ')}
   <div class="scrim above" onclick={closeDetail} role="presentation"></div>
   <aside class="panel above" role="dialog" aria-modal="true" aria-label="Session details">
     <header class="phead">
       <div>
         <h2>{row?.name ?? 'Session ended'}</h2>
         <p class="path">{short(row?.cwd)}{row ? ` · ${selected.host}` : ''}</p>
+        {#if row}<p class="path">{row.where}{row.launchedBy ? ' · megavibe' : ''}</p>{/if}
+        <button class="term" disabled={!!row && !tmuxLive} onclick={() => openTerminal(selected)}
+          title={!row ? 'Resume this ended session in a new Terminal window' : tmuxLive ? 'Attach to this tmux session in a new Terminal window' : 'Running in a plain terminal: cannot be opened from here'}>{!row ? 'Resume in terminal' : tmuxLive ? 'Attach in terminal' : 'Open in terminal'}</button>
       </div>
       <button class="close" onclick={closeDetail} aria-label="Close details">✕</button>
     </header>
+    {#if termMsg}<p class="err">Could not open terminal: {termMsg}</p>{/if}
 
     {#if detailLoading}
       <p class="mut">Reading the transcript…</p>
@@ -553,6 +567,9 @@
   .phead { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; margin-bottom:8px; }
   .phead h2 { font-size:20px; white-space:normal; }
   .close { background:none; border:1px solid var(--line); color:var(--mut); border-radius:8px; width:32px; height:32px; cursor:pointer; font-size:14px; }
+  .term { margin-top:8px; background:none; border:1px solid var(--line); color:var(--fg); border-radius:8px; padding:0 10px; height:32px; cursor:pointer; font-size:12px; white-space:nowrap; }
+  .term:disabled { opacity:.4; cursor:not-allowed; }
+  .term:hover:not(:disabled) { border-color:#35405a; }
   .close:hover { color:var(--fg); border-color:#35405a; }
   .panel section { margin-top:20px; padding-top:16px; border-top:1px solid var(--line); }
   .panel h3 { display:flex; align-items:center; gap:6px; font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--mut); margin:0 0 10px; font-weight:600; }
