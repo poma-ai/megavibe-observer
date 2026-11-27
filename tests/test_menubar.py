@@ -82,6 +82,17 @@ class Menubar(unittest.TestCase):
         self.assertEqual(notes, [])
         self.assertIn("No live sessions | color=gray", lines)
 
+    def test_usage_sections_label_claude_and_codex(self):
+        s = snap([])
+        now = 1_000_000
+        s["hosts"][0]["plan"] = {"at": now * 1000, "fiveHour": {"pct": 6}, "sevenDay": {"pct": 1}}
+        s["hosts"][0]["codexPlan"] = {"at": now * 1000, "fiveHour": {"pct": 0}, "sevenDay": {"pct": 2}}
+        lines, _, _ = mb.plan(s, set(), now=now)
+        c, x = lines.index("Claude | color=#f08a24"), lines.index("Codex | color=#86efac")
+        self.assertLess(c, x)
+        self.assertIn("5h 6% · 7d 1%", lines[c + 1])
+        self.assertIn("5h 0% · 7d 2%", lines[x + 1])
+
 
 if __name__ == "__main__":
     unittest.main()

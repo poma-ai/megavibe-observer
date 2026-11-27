@@ -52,8 +52,9 @@ def age(ms, now):
     return "just now" if m < 1 else "%d min ago" % m if m < 60 else "%d h ago" % (m // 60)
 
 
-def plan(snapshot, notified, now=None):
-    """(menu lines, notifications [(title, text)], keys still in attention). Pure, so it can be tested."""
+def plan(snapshot, notified, now=None, ctl=(), met=()):
+    """(menu lines, notifications [(title, text)], keys still in attention). Pure, so it can be tested.
+    Sections: observer (usage, links, `ctl`), metrics (`met`), then the live sessions."""
     rows = []
     for h in snapshot.get("hosts", []):
         for s in h.get("sessions", []) if h.get("ok") else []:
@@ -66,27 +67,30 @@ def plan(snapshot, notified, now=None):
              for h, s, why in attn if "%s/%s/%s" % (h.get("name"), s.get("sessionId"), why) not in notified]
     busy = sum(1 for _, s, _ in rows if s.get("status") == "busy")
     title = ("⚠ %d" % len(attn) + " | color=#f87171") if attn else ("● %d" % len(roots) + (" | color=#60a5fa" if busy else ""))
-    lines = [title, "---"]
+    sess = []
     order = sorted(roots, key=lambda r: (0 if r[2] else 1 if r[1].get("status") == "busy" else 2))
     for h, s, why in order:
         mark = "⚠" if why else "●" if s.get("status") == "busy" else "○"
         state = why or s.get("status") or "?"
         color = " color=#f87171" if why else ""
-        lines.append("%s %s  (%s) · %s | href=%s%s" % (mark, clean(s.get("name") or "session"), clean(h.get("name")), clean(state), URL, color))
+        sess.append("%s %s  (%s) · %s | href=%s%s" % (mark, clean(s.get("name") or "session"), clean(h.get("name")), clean(state), URL, color))
     if not order:
-        lines.append("No live sessions | color=gray")
+        sess.append("No live sessions | color=gray")
     now = time.time() if now is None else now
-    lines += ["---"]
+    obs = []
     for h in snapshot.get("hosts", []):
         if h.get("ok"):
-            lines.append("%s · %s GB free | color=gray" % (clean(h.get("name")), clean(h.get("disk", {}).get("freeGB", "?"), 8)))
-            p = h.get("plan") or {}
-            parts = ["%s %s%%" % (lbl, clean((p[k] or {}).get("pct"), 5)) for k, lbl in (("fiveHour", "5h"), ("sevenDay", "7d")) if p.get(k)]
-            if parts and isinstance(p.get("at"), (int, float)):
-                lines.append("   %s · as of %s | color=gray" % (" · ".join(parts), age(p["at"], now)))
+            obs.append("%s · %s GB free | color=black,white" % (clean(h.get("name")), clean(h.get("disk", {}).get("freeGB", "?"), 8)))
+            for prov, key, color in (("Claude", "plan", "#f08a24"), ("Codex", "codexPlan", "#86efac")):
+                p = h.get(key) or {}
+                parts = ["%s %s%%" % (lbl, clean((p[k] or {}).get("pct"), 5)) for k, lbl in (("fiveHour", "5h"), ("sevenDay", "7d")) if p.get(k)]
+                if parts and isinstance(p.get("at"), (int, float)):
+                    obs.append("%s | color=%s" % (prov, color))
+                    obs.append("   %s · as of %s | color=black,white" % (" · ".join(parts), age(p["at"], now)))
         else:
-            lines.append("%s unreachable | color=#f87171" % clean(h.get("name")))
-    lines += ["Open Observer | href=" + URL, "Poll usage | refresh=true", "Refresh | refresh=true"]
+            obs.append("%s unreachable | color=#f87171" % clean(h.get("name")))
+    obs += ["---", "Open Observer | href=" + URL, "Poll usage | refresh=true", "Refresh | refresh=true"] + list(ctl)
+    lines = [title, "---"] + obs + ["---"] + (list(met) + ["---"] if met else []) + sess
     return lines, notes, keys
 
 
@@ -199,14 +203,14 @@ def main(as_waybar=False):
         else:
             print("\n".join(["◌ | color=gray", "---", "Observer offline | color=gray"] + control(False) + ["---"] + metrics_control(metrics_up())))
         return
-    lines, notes, keys = plan(snapshot, load_state())
+    lines, notes, keys = plan(snapshot, load_state(), ctl=[] if as_waybar else control(True), met=[] if as_waybar else metrics_control(metrics_up()))
     for title, text in notes:
         try:
             notify(title, text)
         except (OSError, subprocess.SubprocessError):
             pass
     save_state(keys)
-    print(waybar(lines) if as_waybar else "\n".join(lines + control(True) + ["---"] + metrics_control(metrics_up())))
+    print(waybar(lines) if as_waybar else "\n".join(lines))
 
 
 if __name__ == "__main__":

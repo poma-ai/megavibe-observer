@@ -1,6 +1,9 @@
 <script>
   // Grafana from telemetry/metrics.sh; same port as METRICS_GRAFANA_PORT there. The host follows the page so remote access works through the same name.
   const metricsUrl = `http://${location.hostname}:47430/d/megavibe-agents`;
+  let playing = $state(false);
+  // x%, seconds per rush, start delay: each line carries a flash that rushes down it, then rests.
+  const bolts = [[4,9,0],[13,12,5],[27,10,2],[36,14,8],[47,8,3.5],[58,13,6],[66,11,1],[74,15,10],[85,9.5,4.5],[95,12.5,7]];
   let hosts = $state([]);
   let error = $state(null);
   let fetchedAt = $state(null);
@@ -137,13 +140,24 @@
   const short = (p) => (p ?? '').replace(/^\/Users\/[^/]+/, '~');
 </script>
 
+{#if playing}
+  <div class="gears" aria-hidden="true">
+    {#each bolts as [x, secs, delay]}
+      <i class="bolt" style="left:{x}%;--d:{secs}s;--w:{delay}s"></i>
+    {/each}
+  </div>
+{/if}
+
 <main>
   <header>
     <div>
       <h1>Megavibe Observer</h1>
       <p class="sub">{fetchedAt ? 'updated ' + age(fetchedAt) + ' ago' : 'connecting…'}</p>
     </div>
-    <a class="metrics" href={metricsUrl} target="_blank" rel="noopener noreferrer">Metrics ↗</a>
+    <div class="actions">
+      <a class="metrics" href={metricsUrl} target="_blank" rel="noopener noreferrer">Metrics ↗</a>
+      <button class="metrics play" class:on={playing} onclick={() => (playing = !playing)} aria-pressed={playing} aria-label={playing ? 'Stop flashes' : 'Play flashes'} title={playing ? 'Stop' : 'Play'}>{playing ? '❚❚' : '▶'}</button>
+    </div>
   </header>
 
   {#if error}<p class="banner">Server unreachable: {error}</p>{/if}
@@ -209,25 +223,34 @@
     <div class="stat" class:alert={totals.attention}><span class="n">{totals.attention}</span><span class="l">need attention</span></div>
   </section>
 
-  {#each hosts.filter((h) => h.ok && h.plan) as h (h.name)}
+  {#each hosts.filter((h) => h.ok && (h.plan || h.codexPlan)) as h (h.name)}
     <section class="usage">
       <div class="uhead">
         <h3>Plan usage <span class="mut">(account-wide{hosts.length > 1 ? ', ' + h.name : ''})</span></h3>
-        <span class="mut">as of {ago(h.plan.at)}</span>
+        <span class="mut">as of {ago(Math.max(h.plan?.at ?? 0, h.codexPlan?.at ?? 0))}</span>
         <button class="poll" onclick={pollNow} disabled={polling}>{polling ? 'Polling…' : 'Poll now'}</button>
       </div>
-      <div class="ubars">
-        {#each [['5-hour window', h.plan.fiveHour], ['7-day window', h.plan.sevenDay]] as [label, w]}
-          {#if w}
-            <div class="ubar">
-              <div class="brow"><span>{label}</span><b>{w.pct}%</b></div>
-              <div class="track" role="progressbar" aria-label={label} aria-valuemin="0" aria-valuemax="100" aria-valuenow={w.pct}>
-                <div class="fill" class:warn={w.pct >= 75} class:crit={w.pct >= 90} style="width:{Math.min(100, Math.max(0, w.pct))}%"></div>
-              </div>
-              <span class="mut small">resets {resets(w.resetsAt)}</span>
-            </div>
-          {/if}
-        {/each}
+      <div class="pcols">
+      {#each [['Claude', h.plan], ['Codex', h.codexPlan]] as [prov, plan]}
+        {#if plan}
+          <div class="pcol">
+          <div class="prov"><span class="tag" class:codex={prov === 'Codex'} class:claude={prov === 'Claude'}>{prov}</span>{#if h.plan && h.codexPlan}<span class="mut small">as of {ago(plan.at)}</span>{/if}</div>
+          <div class="ubars">
+            {#each [['5-hour window', plan.fiveHour], ['7-day window', plan.sevenDay]] as [label, w]}
+              {#if w}
+                <div class="ubar">
+                  <div class="brow"><span>{prov} · {label}</span><b>{w.pct}%</b></div>
+                  <div class="track" role="progressbar" aria-label="{prov} {label}" aria-valuemin="0" aria-valuemax="100" aria-valuenow={w.pct}>
+                    <div class="fill" class:warn={w.pct >= 75} class:crit={w.pct >= 90} style="width:{Math.min(100, Math.max(0, w.pct))}%"></div>
+                  </div>
+                  <span class="mut small">resets {resets(w.resetsAt)}</span>
+                </div>
+              {/if}
+            {/each}
+          </div>
+          </div>
+        {/if}
+      {/each}
       </div>
     </section>
   {/each}
@@ -448,6 +471,14 @@
   h1 { font-size:22px; margin:0; letter-spacing:-.01em; }
   main > header { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
   .metrics { color:var(--mut); border:1px solid var(--line); border-radius:999px; padding:5px 14px; text-decoration:none; font-size:13px; }
+  .actions { display:flex; gap:8px; align-items:center; }
+  .play { background:none; cursor:pointer; font:inherit; font-size:13px; }
+  .play.on { color:#86efac; border-color:#2f6b4a; }
+  .gears { position:fixed; inset:0; z-index:0; pointer-events:none; overflow:hidden; }
+  .bolt { position:absolute; top:0; bottom:0; width:1px; overflow:hidden; }
+  .bolt::after { content:''; position:absolute; left:0; right:0; top:0; height:14vh; background:linear-gradient(to bottom, rgba(255,32,200,0), rgba(255,32,200,.95)); box-shadow:0 0 7px 1px rgba(255,32,200,.55); transform:translateY(-100%); animation:rush var(--d) cubic-bezier(.5,0,1,.6) var(--w) infinite; }
+  @keyframes rush { 0% { transform:translateY(-100%); opacity:1; } 8% { transform:translateY(calc(100vh)); opacity:1; } 9%,100% { transform:translateY(calc(100vh)); opacity:0; } }
+  main { position:relative; z-index:1; }
   .metrics:hover { color:var(--fg); background:var(--card2); border-color:#35405a; }
   .sub { margin:2px 0 0; color:var(--mut); font-size:13px; }
   .banner { background:#3a1618; border:1px solid var(--crit); color:var(--crit); padding:8px 12px; border-radius:10px; }
@@ -511,6 +542,10 @@
   .kv { display:grid; grid-template-columns:1fr 1fr; gap:12px 16px; margin:0; }
   .kv dd { font-size:15px; }
   .kv .dim dd { color:var(--mut); }
+  .pcols { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:8px 28px; }
+  .prov { display:flex; gap:8px; align-items:center; margin:10px 0 4px; }
+  .tag.claude { color:#f08a24; border-color:#9a4d0c; }
+  .tag.codex { color:#86efac; border-color:#2f6b4a; }
   .usage { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px 16px; margin:0 0 20px; }
   .uhead { display:flex; align-items:baseline; gap:12px; margin-bottom:10px; }
   .uhead h3 { margin:0; font-size:14px; }

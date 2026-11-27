@@ -4,7 +4,7 @@
 Stdlib only and Python 3.6 compatible so it can be piped to a remote `python3 -` over ssh.
 Never emits transcript text: only ids, model names, tool names and counts.
 """
-import glob, json, os, re, shutil, socket, subprocess, sys, time
+import calendar, glob, json, os, re, shutil, socket, subprocess, sys, time
 
 HOME = os.path.expanduser("~")
 TAIL = 400_000            # bytes of transcript tail read per session
@@ -280,6 +280,54 @@ def plan_usage():
     return None
 
 
+def codex_usage():
+    """Account-wide Codex plan usage from the newest rate_limits record in recent Codex rollouts, or None."""
+    root = os.path.join(os.environ.get("CODEX_HOME") or os.path.join(HOME, ".codex"), "sessions")
+    found = []
+    try:
+        for dp, _, fns in os.walk(root):
+            for fn in fns:
+                if fn.startswith("rollout-") and fn.endswith(".jsonl"):
+                    fp = os.path.join(dp, fn)
+                    found.append((os.path.getmtime(fp), fp))
+    except OSError:
+        return None
+    for _, fp in sorted(found, reverse=True)[:8]:
+        try:
+            with open(fp, "rb") as f:
+                f.seek(0, os.SEEK_END)
+                f.seek(max(0, f.tell() - 262144))
+                lines = f.read().split(b"\n")
+        except OSError:
+            continue
+        for raw in reversed(lines):
+            if b"rate_limits" not in raw:
+                continue
+            try:
+                d = json.loads(raw)
+                rl = d["payload"]["rate_limits"]
+                ts = d["timestamp"]
+            except (ValueError, KeyError, TypeError):
+                continue
+            if not isinstance(rl, dict) or rl.get("limit_id", "codex") != "codex":
+                continue
+            try:
+                at = int(calendar.timegm(time.strptime(ts[:19], "%Y-%m-%dT%H:%M:%S")) * 1000)
+            except (ValueError, TypeError):
+                continue
+            out = {"at": at}
+            for w in (rl.get("primary"), rl.get("secondary")):
+                if not isinstance(w, dict) or not isinstance(w.get("used_percent"), (int, float)):
+                    continue
+                name = {300: "fiveHour", 10080: "sevenDay"}.get(w.get("window_minutes"))
+                if name:
+                    r = w.get("resets_at")
+                    out[name] = {"pct": w["used_percent"], "resetsAt": int(r * 1000) if isinstance(r, (int, float)) else None}
+            if "fiveHour" in out or "sevenDay" in out:
+                return out
+    return None
+
+
 SLASH = re.compile(r"<command-name>/?([0-9A-Za-z_.:-]{1,64})</command-name>")
 
 
@@ -521,7 +569,7 @@ def snapshot():
     jobs = codex_jobs(parent, comm, running, panes, by_pid, sessions)
     sessions.sort(key=lambda x: x["startedAt"] or 0)
     return {"host": socket.gethostname().split(".")[0], "collectedAt": int(time.time() * 1000),
-            "python": "%d.%d.%d" % sys.version_info[:3], "disk": disk(), "plan": plan_usage(), "sessions": sessions,
+            "python": "%d.%d.%d" % sys.version_info[:3], "disk": disk(), "plan": plan_usage(), "codexPlan": codex_usage(), "sessions": sessions,
             "jobs": jobs, "warnings": list(WARNINGS)}
 
 
